@@ -1,0 +1,2394 @@
+<!DOCTYPE html>
+<!-- OBS 直播间监控大盘 v1.3.0 | CHANGELOG.md -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OBS 直播间监控大盘</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script src="https://cdn.jsdelivr.net/npm/flv.js@1"></script>
+<style>
+:root {
+  --bg:#0b0f19; --card:#131a2b; --border:#1e2a3d; --borderH:#2a3a55;
+  --text:#e4e9f2; --dim:#8899b4; --mute:#556680; --accent:#4080ff;
+  --accentBg:rgba(64,128,255,.1); --green:#2ecc71; --greenBg:rgba(46,204,113,.1);
+  --yellow:#f0b429; --yellowBg:rgba(240,180,41,.1); --red:#e74c3c;
+  --redBg:rgba(231,76,60,.1); --orange:#e67e22; --radius:8px; --radiusSm:5px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh}
+
+/* ═══ TOP BAR ═══ */
+.topbar{position:sticky;top:0;z-index:100;background:rgba(13,17,29,.94);
+  backdrop-filter:blur(16px);border-bottom:1px solid var(--border);
+  padding:8px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.logo{font-size:15px;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.logo span{color:var(--accent)}
+.summary{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap}
+.summary-item{display:flex;align-items:center;gap:5px;padding:4px 10px;
+  border-radius:16px;font-size:11px;font-weight:600;background:var(--border);white-space:nowrap}
+.summary-item .dot{width:6px;height:6px;border-radius:50%}
+.summary-item .val{font-size:13px;margin:0 2px;color:var(--accent)}
+.btn-add{padding:4px 12px;border-radius:16px;border:1px solid var(--accent);
+  background:var(--accentBg);color:var(--accent);cursor:pointer;font-size:13px;font-weight:600;transition:.2s}
+.btn-add:hover{background:var(--accent);color:#fff;box-shadow:0 0 16px rgba(64,128,255,.3)}
+.btn-io{padding:4px 12px;border-radius:16px;border:1px solid;cursor:pointer;font-size:12px;font-weight:600;transition:.2s;white-space:nowrap;background:transparent}
+.btn-io.export-btn{border-color:var(--green);color:var(--green)}
+.btn-io.export-btn:hover{background:var(--green);color:#fff;box-shadow:0 0 12px rgba(46,204,113,.3)}
+.btn-io.import-btn{border-color:var(--accent);color:var(--accent)}
+.btn-io.import-btn:hover{background:var(--accent);color:#fff;box-shadow:0 0 12px rgba(64,128,255,.3)}
+
+/* ═══ LAYOUT: SIDEBAR + MAIN ═══ */
+.app-body{display:flex;height:calc(100vh - 48px);overflow:hidden}
+.sidebar{width:248px;min-width:248px;height:100%;overflow-y:auto;background:rgba(13,17,29,.92);border-right:1px solid var(--border);display:flex;flex-direction:column;user-select:none}
+.sidebar .side-hd{padding:10px 14px;font-size:11px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,.04);flex-shrink:0}
+.sidebar .side-tree{flex:1;overflow-y:auto;padding:6px 0}
+.sidebar .side-ft{padding:8px 10px;border-top:1px solid rgba(255,255,255,.04);flex-shrink:0}
+.main-content{flex:1;display:flex;flex-direction:column;overflow-y:auto}
+
+/* ═══ SIDEBAR TREE ═══ */
+.tree-root{padding:0 10px}
+.tree-root .tr-item{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;transition:.12s;margin-bottom:2px}
+.tree-root .tr-item:hover{background:rgba(255,255,255,.04)}
+.tree-root .tr-item.active{background:var(--accentBg);color:var(--accent)}
+.tree-root .tr-item .tr-icon{font-size:15px;flex-shrink:0}
+.tree-root .tr-item .tr-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree-root .tr-item .tr-expand{font-size:10px;color:var(--mute);flex-shrink:0;transition:transform .2s}
+.tree-root .tr-item .tr-expand.open{transform:rotate(90deg)}
+.tree-loc-group{margin-left:20px;border-left:1px solid rgba(255,255,255,.06);padding-left:8px}
+.tree-loc-group.collapsed{display:none}
+.tree-loc-node{padding:2px 0}
+.tree-loc-node .tl-header{display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:4px;font-size:11px;color:var(--dim);cursor:pointer;transition:.12s}
+.tree-loc-node .tl-header:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.tree-loc-node .tl-header.sel{background:var(--accentBg);color:var(--accent);font-weight:600}
+.tree-loc-node .tl-header .tl-icon{font-size:13px;flex-shrink:0}
+.tree-loc-node .tl-header .tl-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree-loc-node .tl-header .tl-arr{font-size:9px;color:var(--mute);flex-shrink:0;transition:transform .2s}
+.tree-loc-node .tl-header .tl-arr.open{transform:rotate(90deg)}
+.tree-loc-node .tl-count{font-size:9px;color:var(--mute);margin-left:auto;flex-shrink:0}
+.tree-oa-group{margin-left:20px;border-left:1px solid rgba(255,255,255,.04);padding-left:8px}
+.tree-oa-group.collapsed{display:none}
+.tree-oa-node{padding:1px 0}
+.tree-oa-node .to-header{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:4px;font-size:11px;color:var(--dim);cursor:pointer;transition:.12s}
+.tree-oa-node .to-header:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.tree-oa-node .to-header.sel{background:var(--accentBg);color:var(--accent)}
+.tree-oa-node .to-header .to-icon{font-size:12px;flex-shrink:0}
+.tree-oa-node .to-header .to-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree-oa-node .to-header .to-arr{font-size:9px;color:var(--mute);flex-shrink:0;transition:transform .2s}
+.tree-oa-node .to-header .to-arr.open{transform:rotate(90deg)}
+.tree-fl-group{margin-left:20px;border-left:1px solid rgba(255,255,255,.03);padding-left:8px}
+.tree-fl-group.collapsed{display:none}
+.tree-fl-node{padding:1px 0}
+.tree-fl-node .tf-item{display:flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;font-size:10px;color:var(--mute);cursor:pointer;transition:.12s}
+.tree-fl-node .tf-item:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.tree-fl-node .tf-item.active{background:rgba(64,128,255,.12);color:var(--accent);font-weight:600}
+.tree-fl-node .tf-item .tf-icon{font-size:11px;flex-shrink:0}
+.tree-fl-node .tf-item .tf-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree-fl-node .tf-item .tf-count{font-size:9px;color:var(--mute);flex-shrink:0}
+
+/* ═══ MAIN CONTENT HEADER ═══ */
+.main-hd{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:rgba(13,17,29,.6)}
+.main-hd .main-title{font-size:13px;font-weight:700;color:var(--text)}
+.main-hd .main-sub{font-size:11px;color:var(--dim)}
+.main-hd .btn-add-main{margin-left:auto;padding:5px 14px;border-radius:16px;border:1px solid var(--accent);background:var(--accentBg);color:var(--accent);cursor:pointer;font-size:12px;font-weight:600;transition:.2s;white-space:nowrap}
+.main-hd .btn-add-main:hover{background:var(--accent);color:#fff;box-shadow:0 0 16px rgba(64,128,255,.3)}
+
+/* ═══ LOCATION TAG (卡片上) ═══ */
+.location-tag{font-size:12px;color:var(--accent);background:var(--accentBg);
+  padding:2px 8px;border-radius:10px;flex-shrink:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;user-select:none}
+.location-tag:hover{background:var(--accent);color:#fff}
+
+/* ═══ LOCATION MANAGER MODAL ═══ */
+.loc-modal .tree{margin:8px 0;max-height:380px;overflow-y:auto}
+.loc-modal .tree-loc{margin-bottom:2px}
+.loc-modal .tree-loc .loc-header{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;background:rgba(64,128,255,.06);border:1px solid rgba(64,128,255,.12);margin-bottom:2px}
+.loc-modal .tree-loc .loc-header .loc-icon{font-size:15px}
+.loc-modal .tree-loc .loc-header .loc-name{font-weight:700;font-size:13px;color:var(--accent);flex:1}
+.loc-modal .tree-loc .loc-header .loc-act{font-size:10px;color:var(--dim);cursor:pointer;padding:2px 7px;border-radius:3px;background:rgba(255,255,255,.04);border:none;transition:.12s;white-space:nowrap}
+.loc-modal .tree-loc .loc-header .loc-act:hover{color:var(--text);background:var(--border)}
+.loc-modal .tree-loc .loc-header .loc-act.del:hover{color:var(--red);background:var(--redBg)}
+.loc-modal .tree-loc .loc-children{margin-left:24px;border-left:1px solid var(--border);padding-left:12px}
+.loc-modal .tree-oa{margin-bottom:2px}
+.loc-modal .tree-oa .oa-header{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;margin-bottom:1px}
+.loc-modal .tree-oa .oa-header .oa-icon{font-size:13px}
+.loc-modal .tree-oa .oa-header .oa-name{font-weight:600;font-size:12px;color:var(--text);flex:1}
+.loc-modal .tree-oa .oa-header .oa-act{font-size:10px;color:var(--dim);cursor:pointer;padding:2px 7px;border-radius:3px;background:rgba(255,255,255,.04);border:none;transition:.12s;white-space:nowrap}
+.loc-modal .tree-oa .oa-header .oa-act:hover{color:var(--text);background:var(--border)}
+.loc-modal .tree-oa .oa-header .oa-act.del:hover{color:var(--red);background:var(--redBg)}
+.loc-modal .tree-oa .oa-children{margin-left:20px;border-left:1px solid var(--border);padding-left:12px}
+.loc-modal .tree-fl .fl-row{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:4px;font-size:11px}
+.loc-modal .tree-fl .fl-row .fl-icon{font-size:11px}
+.loc-modal .tree-fl .fl-row .fl-name{color:var(--dim);flex:1}
+.loc-modal .tree-fl .fl-row .fl-act{font-size:9px;color:var(--dim);cursor:pointer;padding:1px 6px;border-radius:3px;background:rgba(255,255,255,.04);border:none;transition:.12s;white-space:nowrap}
+.loc-modal .tree-fl .fl-row .fl-act:hover{color:var(--text);background:var(--border)}
+.loc-modal .tree-fl .fl-row .fl-act.del:hover{color:var(--red);background:var(--redBg)}
+.loc-modal .add-row{display:flex;gap:4px;margin-top:4px;margin-bottom:2px}
+.loc-modal .add-row input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 8px;border-radius:4px;outline:none}
+.loc-modal .add-row input:focus{border-color:var(--accent)}
+.loc-modal .add-row button{padding:4px 10px;border-radius:4px;border:1px solid var(--accent);background:var(--accentBg);color:var(--accent);cursor:pointer;font-size:11px;transition:.15s;white-space:nowrap}
+.loc-modal .add-row button:hover{background:var(--accent);color:#fff}
+.loc-modal .add-top{margin-top:8px;margin-bottom:0}
+
+/* ═══ 弹窗字段 datalist 提示 ═══ */
+.field datalist{}
+
+/* ═══ GRID ═══ */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:10px;padding:12px 16px 30px}
+@media(max-width:1100px){.grid{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+
+/* ═══ CARD ═══ */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:.2s}
+.card:hover{border-color:var(--borderH)}
+.card.alert{border-color:var(--red)!important;animation:pulse 2.5s infinite}
+.card.offline{opacity:.55}
+@keyframes pulse{0%,100%{box-shadow:0 0 8px rgba(231,76,60,.15)}50%{box-shadow:0 0 20px rgba(231,76,60,.3)}}
+
+/* ═══ HEADER ═══ */
+.card-header{padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)}
+.card-header .left{display:flex;align-items:center;gap:8px;min-width:0}
+.card-header .sdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.card-header .rname{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-header .plt{font-size:11px;color:var(--dim);white-space:nowrap}
+.card-header .acts{display:flex;gap:4px}
+.card-header .acts button{background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;transition:.15s}
+.card-header .acts button:hover{color:var(--text);background:var(--border)}
+
+/* ═══ VIDEO AREA ═══ */
+.video-area{position:relative;background:#000;aspect-ratio:16/9;overflow:hidden;cursor:pointer}
+.video-area video,.video-area canvas{width:100%;height:100%;object-fit:contain}
+.video-area .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(0,0,0,.55);transition:.2s}
+.video-area .play-btn{width:56px;height:56px;border-radius:50%;border:2px solid rgba(255,255,255,.8);background:rgba(64,128,255,.25);color:#fff;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:.2s}
+.video-area .play-btn:hover{background:var(--accent);transform:scale(1.08);box-shadow:0 0 24px rgba(64,128,255,.5)}
+.video-area .play-hint{font-size:12px;color:rgba(255,255,255,.6)}
+.video-area .no-url{font-size:12px;color:var(--yellow);background:rgba(0,0,0,.6);padding:4px 12px;border-radius:12px}
+.video-area .overlay .status-badges{position:absolute;top:8px;right:8px;display:flex;gap:5px;z-index:2}
+.video-area .stream-badge{padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;white-space:nowrap}
+.video-area .stream-badge.live{background:#e74c3c;color:#fff;animation:pulse2 1.5s infinite}
+.video-area .stream-badge.off{background:rgba(255,255,255,.15);color:var(--dim)}
+.video-area .stream-badge.rec{background:#e67e22;color:#fff;animation:pulse2 1.5s infinite}
+.video-area .stream-badge.vcam{background:#8e44ad;color:#fff}
+@keyframes pulse2{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* ═══ MODULE ROWS (左侧模块名 + 右侧网格对齐) ═══ */
+.params-section{padding:10px 16px;display:flex;flex-direction:column;gap:5px}
+.module-row{display:grid;grid-template-columns:54px 1fr;align-items:start;gap:6px;padding:6px 10px;background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.04);border-radius:5px}
+.module-row.detect-row{border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.025)}
+.module-row .m-head{display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:2px}
+.module-row .m-head .m-icon{font-size:16px;line-height:1}
+.module-row .m-head .m-title{font-size:9px;color:var(--mute);font-weight:700;text-align:center;line-height:1.3}
+.module-row .m-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:1px 12px}
+.module-row .m-item{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:11px;padding:1px 0;min-width:0}
+.module-row .m-label{color:var(--dim);font-size:10px;flex-shrink:0}
+.module-row .m-value{font-weight:600;color:var(--text);font-size:11px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.module-row .m-value.ok{color:var(--green)}
+.module-row .m-value.warn{color:var(--yellow)}
+.module-row .m-value.bad{color:var(--red)}
+.module-row .m-dot{width:4px;height:4px;border-radius:50%;flex-shrink:0}
+.module-row .m-dot.ok{background:var(--green)}
+.module-row .m-dot.warn{background:var(--yellow)}
+.module-row .m-dot.bad{background:var(--red)}
+@media(max-width:800px){.module-row{grid-template-columns:44px 1fr;gap:4px}.module-row .m-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}.module-row .m-value{font-size:10px}}
+
+/* ═══ MIC VOLUME METER ═══ */
+.mic-meter-item{grid-column:1/-1}
+.mic-bar-wrap{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.mic-meter{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+.mic-meter-bar{flex:1;height:18px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;position:relative}
+.mic-meter-fill{height:100%;border-radius:3px;transition:width 80ms linear;width:0%;
+  background:linear-gradient(to right,#2ecc71 0%,#2ecc71 30%,#f0b429 50%,#f0b429 60%,#e67e22 75%,#e74c3c 88%,#e74c3c 100%)}
+.mic-meter-db{font-size:10px;font-weight:600;color:var(--dim);min-width:54px;text-align:right;font-variant-numeric:tabular-nums}
+.mic-meter-db.muted{color:var(--red)}
+.mic-scale{display:flex;justify-content:space-between;padding:0 2px}
+.mic-scale span{font-size:7px;color:var(--mute);min-width:18px;text-align:center}
+.mic-scale span.s0{color:var(--red);font-weight:700}
+
+/* ═══ URL ROW ═══ */
+.url-row{padding:8px 16px;display:flex;flex-direction:column;gap:5px;border-top:1px solid rgba(255,255,255,.03)}
+.url-item{display:flex;align-items:center;gap:6px;font-size:11px}
+.url-item .ul{color:var(--mute);white-space:nowrap;min-width:56px}
+.url-item .uv{font-family:monospace;font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(0,0,0,.2);padding:2px 8px;border-radius:4px;flex:1}
+.url-item .uv.auto{color:var(--green)}
+.url-item .uv.manual{color:var(--accent)}
+.url-item .copy-btn{font-size:10px;background:var(--border);border:none;color:var(--dim);cursor:pointer;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.url-item .copy-btn:hover{color:var(--text);background:var(--accent)}
+
+/* ═══ FOOTER ═══ */
+.card-footer{padding:6px 16px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);font-size:11px;color:var(--mute);gap:8px}
+.card-footer .fi{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-footer .ft{white-space:nowrap}
+
+/* ═══ EMPTY ═══ */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px 20px;text-align:center;color:var(--dim)}
+.empty-state .icon{font-size:48px}
+.empty-state h3{font-size:16px;color:var(--text)}
+.empty-state p{font-size:13px;max-width:360px;line-height:1.6}
+.empty-state .btn-add-large{padding:10px 28px;border-radius:24px;border:1px solid var(--accent);background:var(--accentBg);color:var(--accent);cursor:pointer;font-size:14px;font-weight:600;transition:.2s}
+.empty-state .btn-add-large:hover{background:var(--accent);color:#fff}
+
+/* ═══ MODAL ═══ */
+.modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;width:420px;max-width:94vw;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.modal h3{font-size:16px;margin-bottom:16px}
+.modal .field{margin-bottom:14px}
+.modal .field label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px}
+.modal .field input,.modal .field select{width:100%;padding:8px 12px;border-radius:var(--radiusSm);border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--font);outline:none}
+.modal .field input:focus,.modal .field select:focus{border-color:var(--accent)}
+.modal .field .hint{font-size:11px;color:var(--mute);margin-top:3px}
+.modal .actions-row{display:flex;gap:10px;justify-content:flex-end}
+.modal .actions-row button{padding:7px 18px;border-radius:var(--radiusSm);border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px}
+.modal .actions-row button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.modal .actions-row button.primary:hover{box-shadow:0 0 12px rgba(64,128,255,.3)}
+.modal .actions-row button.danger{background:var(--red);border-color:var(--red);color:#fff}
+
+/* ═══ LOG WIDGET ═══ */
+/* ── 日志小部件（侧边栏底部）── */
+.log-widget{width:100%;max-height:220px;overflow:hidden;border-radius:6px;border:1px solid var(--border);background:rgba(13,17,29,.6);transition:max-height .3s;margin-bottom:6px}
+.log-widget.collapsed{max-height:30px}
+.log-widget .log-header{cursor:pointer;padding:5px 10px;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;color:var(--accent);border-bottom:1px solid var(--border);background:rgba(64,128,255,.06);user-select:none}
+.log-widget .log-header .log-dot{width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:6px;animation:pulse-dot 2s infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+.log-widget .log-body{padding:6px 8px;display:flex;flex-direction:column;gap:5px}
+.log-widget .log-controls{display:flex;gap:3px;align-items:center}
+.log-widget .log-controls button{background:var(--border);border:none;color:var(--dim);cursor:pointer;font-size:11px;padding:4px 12px;border-radius:4px;white-space:nowrap;transition:.15s;width:100%}
+.log-widget .log-controls button:hover{background:var(--accent);color:#fff}
+.log-widget .log-lines{overflow-y:auto;max-height:100px;font-family:Consolas,monospace;font-size:10px;color:var(--dim);line-height:1.4;white-space:pre-wrap;word-break:break-all}
+</style>
+</head>
+<body>
+
+<!-- ═══ TOP BAR ═══ -->
+<div class="topbar">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    OBS <span>监控大盘</span>
+  </div>
+  <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importConfig(event)">
+  <button class="btn-io export-btn" onclick="exportConfig()" title="导出所有房间和层级配置">📤 导出配置</button>
+  <button class="btn-io import-btn" onclick="importConfig()" title="从文件导入房间和层级配置">📥 导入配置</button>
+  <div class="summary" id="summaryBar">
+    <div class="summary-item"><span class="dot" style="background:var(--accent)"></span>总计<span class="val" id="sumTotal">0</span>间</div>
+    <div class="summary-item"><span class="dot" style="background:var(--green)"></span>在线<span class="val" id="sumOnline">0</span></div>
+    <div class="summary-item"><span class="dot" style="background:#e74c3c"></span>推流<span class="val" id="sumStreaming">0</span></div>
+    <div class="summary-item"><span class="dot" style="background:var(--yellow)"></span>告警<span class="val" id="sumAlerts">0</span></div>
+  </div>
+</div>
+
+<!-- ═══ APP BODY: SIDEBAR + MAIN ═══ -->
+<div class="app-body">
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="appSidebar">
+    <div class="side-hd">📍 层级导航</div>
+    <div class="side-tree" id="sideTree"></div>
+    <div class="side-ft">
+      <div class="log-widget collapsed" id="logWidget">
+        <div class="log-header" onclick="toggleLogWidget()">
+          <span><span class="log-dot"></span>运行日志</span>
+          <span id="logToggleIcon" style="font-size:11px">▶</span>
+        </div>
+        <div class="log-body">
+          <div class="log-controls">
+            <button onclick="saveLog()" title="下载日志文件">💾 下载日志</button>
+          </div>
+          <div class="log-lines" id="logLines"></div>
+        </div>
+      </div>
+      <button class="btn-manage-side" onclick="showLocManager()" title="管理层级结构" style="width:100%;background:rgba(64,128,255,.08);border:1px solid var(--border);color:var(--dim);cursor:pointer;font-size:11px;padding:5px 10px;border-radius:5px;transition:.15s" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--dim)';this.style.borderColor='var(--border)'">⚙ 管理层级</button>
+    </div>
+  </div>
+  <!-- MAIN -->
+  <div class="main-content" id="mainContent">
+    <div class="main-hd">
+      <span class="main-title" id="mainTitle">🌐 全部直播间</span>
+      <span class="main-sub" id="mainSub"></span>
+      <button class="btn-add-main" onclick="showAddModal()">+ 添加直播间</button>
+    </div>
+    <div class="grid" id="roomGrid">
+      <div class="empty-state" id="emptyState">
+        <div class="icon">📡</div><h3>还没有监控房间</h3>
+        <p>被监控电脑上开启 OBS WebSocket 后，<br>在大盘填写 IP、端口、密码即可实时监控。<br>拉流地址会自动从推流地址推断。</p>
+        <button class="btn-add-main" style="margin:10px auto" onclick="showAddModal()">+ 添加第一个房间</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL ═══ -->
+<div class="modal-overlay" id="modalOverlay" style="display:none" onclick="if(event.target===this)hideModal()">
+  <div class="modal">
+    <h3 id="modalTitle">添加房间</h3>
+    <div class="field"><label>房间名称</label><input type="text" id="fldName" placeholder="如：直播间01-游戏区"></div>
+    <div class="field"><label>OBS WebSocket 地址</label><input type="text" id="fldHost" placeholder="192.168.1.101"></div>
+    <div class="field"><label>端口</label><input type="number" id="fldPort" value="4455" min="1" max="65535"><span class="hint">默认 4455</span></div>
+    <div class="field"><label>WebSocket 密码</label><input type="password" id="fldPass" placeholder="留空表示无密码"></div>
+    <div class="field"><label>推流平台</label><select id="fldPlatform"><option value="自有平台">自有平台</option><option value="即构ZEGO">即构ZEGO</option><option value="抖音">抖音</option><option value="视频号">视频号</option><option value="B站">B站</option><option value="快手">快手</option><option value="阿里云直播">阿里云直播</option><option value="腾讯云直播">腾讯云直播</option><option value="其他">其他</option></select><span class="hint">选对平台可帮助自动推断拉流地址</span></div>
+    <div class="field"><label>📍 地点</label><input type="text" id="fldLocation" placeholder="如：北京" list="dlLocation"><datalist id="dlLocation"></datalist></div>
+    <div class="field"><label>🏢 办公区</label><input type="text" id="fldOffice" placeholder="如：望京SOHO" list="dlOffice"><datalist id="dlOffice"></datalist></div>
+    <div class="field"><label>📋 楼层</label><input type="text" id="fldFloor" placeholder="如：3F" list="dlFloor"><datalist id="dlFloor"></datalist></div>
+    <div class="field"><label>拉流地址（可选，留空自动推断）</label><input type="text" id="fldPullUrl" placeholder="自动从推流地址推断，也可手动填写"><span class="hint">联网后自动生成候选拉流地址，支持 HLS/FLV</span></div>
+    <div class="actions-row">
+      <button id="btnDelete" style="display:none" class="danger" onclick="deleteRoom()">删除</button>
+      <button class="primary" onclick="saveRoom()">保存</button>
+      <button onclick="hideModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LOCATION MANAGER MODAL ═══ -->
+<div class="modal-overlay" id="locModalOverlay" style="display:none" onclick="if(event.target===this)hideLocModal()">
+  <div class="modal loc-modal" style="max-width:520px">
+    <h3>📍 管理层级结构</h3>
+    <div class="tree" id="locTree"></div>
+    <div class="add-row add-top">
+      <input type="text" id="newLocName" placeholder="新地点名称（如：深圳）">
+      <button onclick="addLocation()">+ 添加地点</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// 纯 JS SHA-256（同步）
+// ═══════════════════════════════════════
+const OBSAuth=(()=>{
+  function sha256(msg){
+    const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+    let bytes=[];
+    for(let i=0;i<msg.length;i++){const c=msg.charCodeAt(i);if(c<0x80)bytes.push(c);else if(c<0x800){bytes.push(0xc0|(c>>6),0x80|(c&0x3f))}else{bytes.push(0xe0|(c>>12),0x80|((c>>6)&0x3f),0x80|(c&0x3f))}}
+    const bl=bytes.length*8;bytes.push(0x80);
+    while((bytes.length%64)!==56)bytes.push(0);
+    bytes.push(0,0,0,0);bytes.push((bl>>>24)&0xff,(bl>>>16)&0xff,(bl>>>8)&0xff,bl&0xff);
+    const H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+    for(let i=0;i<bytes.length;i+=64){
+      const W=new Array(64);
+      for(let t=0;t<16;t++)W[t]=(bytes[i+t*4]<<24)|(bytes[i+t*4+1]<<16)|(bytes[i+t*4+2]<<8)|bytes[i+t*4+3];
+      for(let t=16;t<64;t++){const s0=((W[t-15]>>>7)|(W[t-15]<<25))^((W[t-15]>>>18)|(W[t-15]<<14))^(W[t-15]>>>3);const s1=((W[t-2]>>>17)|(W[t-2]<<15))^((W[t-2]>>>19)|(W[t-2]<<13))^(W[t-2]>>>10);W[t]=(W[t-16]+s0+W[t-7]+s1)>>>0}
+      let[a,b,c,d,e,f,g,h]=H;
+      for(let t=0;t<64;t++){
+        const S1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7));const ch=(e&f)^(~e&g);
+        const T1=(h+S1+ch+K[t]+W[t])>>>0;const S0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10));
+        const maj=(a&b)^(a&c)^(b&c);const T2=(S0+maj)>>>0;h=g;g=f;f=e;e=(d+T1)>>>0;d=c;c=b;b=a;a=(T1+T2)>>>0}
+      H[0]=(H[0]+a)>>>0;H[1]=(H[1]+b)>>>0;H[2]=(H[2]+c)>>>0;H[3]=(H[3]+d)>>>0;
+      H[4]=(H[4]+e)>>>0;H[5]=(H[5]+f)>>>0;H[6]=(H[6]+g)>>>0;H[7]=(H[7]+h)>>>0}
+    const out=new Uint8Array(32);
+    for(let i=0;i<8;i++){out[i*4]=H[i]>>>24;out[i*4+1]=(H[i]>>>16)&0xff;out[i*4+2]=(H[i]>>>8)&0xff;out[i*4+3]=H[i]&0xff}
+    return out}
+  function b64(buf){let s='';for(let i=0;i<buf.length;i++)s+=String.fromCharCode(buf[i]);return btoa(s)}
+  return{sha256base64:(m)=>b64(sha256(m))}})();
+
+// ═══════════════════════════════════════
+// 拉流地址自动推断引擎
+// ═══════════════════════════════════════
+function inferPullUrl(pushUrl, platform) {
+  if (!pushUrl || pushUrl === '--') return [];
+  // 提取查询参数（保留在 URL 中）
+  const qm = pushUrl.indexOf('?');
+  const queryPart = qm >= 0 ? pushUrl.substring(qm) : '';
+  let base = pushUrl.replace(/[?#].*$/, '');
+  // 去掉末尾的 ...
+  base = base.replace(/\.{2,}$/, '');
+  // 去掉尾部 key 分隔符 /
+  base = base.replace(/\/+$/, '');
+  const candidates = [];
+  // 解析推流地址
+  let scheme = 'rtmp', domain = '', path = '';
+  const m = base.match(/^(rtmp[s]?|srt):\/\/([^/]+)(\/.*)?$/);
+  if (m) {
+    scheme = m[1]; domain = m[2]; path = (m[3] || '');
+  } else { return []; }
+
+  const parts = path.replace(/^\//, '').split('/').filter(Boolean);
+  const streamKey = parts.length > 0 ? parts[parts.length - 1] : 'stream';
+  const app = parts.length > 1 ? parts.slice(0, -1).join('/') : 'live';
+
+  // ═══ 即构ZEGO：固定拉流域名 + 应用名 + 流名.flv ═══
+  if (platform === '即构ZEGO' || domain.includes('inzego.com') || domain.includes('zego')) {
+    const pullDomain = 'play-hw.live-zego.lizhiweike.com';
+    const pullApp = 'lizhiweike';
+    // 只返回 FLV 地址，浏览器直接播放
+    candidates.push(`https://${pullDomain}/${pullApp}/${streamKey}.flv`);
+  } else if (platform === '阿里云直播') {
+    // 阿里云: rtmp://{push_domain}/live/{streamKey} → https://{pull_domain}/live/{streamKey}.m3u8
+    // 推流域名可能有 push / push- 前缀
+    const pullDomain = domain.replace(/^push[.-]?/, '').replace(/^push/, 'live');
+    candidates.push(`https://${pullDomain}/${app}/${streamKey}.m3u8`);
+    candidates.push(`https://${pullDomain}/${app}/${streamKey}.flv`);
+    candidates.push(`https://${domain}/${app}/${streamKey}.m3u8`);
+  } else if (platform === '腾讯云直播') {
+    const pullDomain = domain.replace(/^push[.-]?/, 'live').replace(/^push/, 'live');
+    candidates.push(`https://${pullDomain}/${app}/${streamKey}.m3u8`);
+    candidates.push(`https://${pullDomain}/${app}/${streamKey}.flv`);
+    candidates.push(`https://${domain}/${app}/${streamKey}.m3u8`);
+  } else if (platform === 'B站') {
+    // B站推流 rtmp://live-push.bilivideo.com/live-bvc/?streamname=xxx&key=yyy
+    // B站拉流通常由B站分配，推流地址无法直接推断
+    candidates.push(`https://live-pull.bilivideo.com/${app}/${streamKey}.flv`);
+    candidates.push(`https://live-pull.bilivideo.com/${app}/${streamKey}.m3u8`);
+  } else {
+    // ═══ 通用规则 ═══
+    // 1. 同域名，HLS 后缀
+    candidates.push(`https://${domain}/${app}/${streamKey}/index.m3u8`);
+    candidates.push(`https://${domain}/${app}/${streamKey}.m3u8`);
+    // 2. 同域名，FLV 后缀
+    candidates.push(`https://${domain}/${app}/${streamKey}.flv`);
+    // 3. 尝试 l-rtmp → l-hls 域名替换
+    if (domain.includes('l-rtmp') || domain.includes('rtmp')) {
+      const alt = domain.replace('l-rtmp', 'l-hls').replace('rtmp', 'hls');
+      if (alt !== domain) {
+        candidates.push(`https://${alt}/${app}/${streamKey}/index.m3u8`);
+        candidates.push(`https://${alt}/${app}/${streamKey}.m3u8`);
+      }
+    }
+    // 4. 尝试 rtsp 直播
+    candidates.push(`rtsp://${domain}/${path}`);
+  }
+  return candidates;
+}
+
+// 用 OBS 的 pushUrl 生成最终拉流地址（更新到 state）
+function resolvePullUrl(room, state) {
+  // 1. 用户手动填写优先
+  if (room.pullUrl && room.pullUrl.trim()) return { url: room.pullUrl.trim(), source: 'manual' };
+  // 2. 从 state.pushUrl 推断
+  if (!state.pushUrl || state.pushUrl === '--') return { url: null, source: 'none' };
+  // 3. 生成候选（每次推断取第一个候选）
+  const candidates = inferPullUrl(state.pushUrl, room.platform);
+  if (candidates.length > 0) {
+    // 检查是否已有缓存的可用 URL
+    if (state.workingPullUrl) return { url: state.workingPullUrl, source: state.pullSource || 'inferred' };
+    return { url: candidates[0], source: 'inferred', candidates };
+  }
+  return { url: null, source: 'none' };
+}
+
+// ═══════════════════════════════════════
+// 编码器名称美化
+// ═══════════════════════════════════════
+function prettyEncoder(raw) {
+  if (!raw) return '--';
+  const map = {
+    'obs_x264': 'H.264 (x264)',
+    'obs_qsv11': 'H.264 (QSV)',
+    'obs_qsv11_av1': 'AV1 (QSV)',
+    'obs_qsv11_hevc': 'H.265/HEVC (QSV)',
+    'ffmpeg_nvenc': 'H.264 (NVENC)',
+    'nvenc_h264': 'H.264 (NVENC)',
+    'nvenc_hevc': 'H.265/HEVC (NVENC)',
+    'obs_amf_h264': 'H.264 (AMF)',
+    'obs_amf_hevc': 'H.265/HEVC (AMF)',
+    'obs_amf_av1': 'AV1 (AMF)',
+    'obs_output_ffmpeg_mpegts_muxer': 'MPEG-TS',
+    'simple_h264_stream': 'H.264 (Simple)',
+    'simple_h265_stream': 'H.265 (Simple)',
+    'obs_apple_h264': 'H.264 (Apple VT)',
+    'obs_apple_hevc': 'H.265 (Apple VT)',
+    'obs_apple_prores': 'ProRes (Apple)',
+    'obs_apple_h264_encoder2': 'H.264 (VT)',
+    'obs_apple_prores422': 'ProRes 422',
+    'obs_streaming_server': 'OBS Stream Server',
+    'ffmpeg_aac': 'AAC (FFmpeg)',
+    'CoreAudio_AAC': 'AAC (CoreAudio)',
+    'obs_ffmpeg_aac': 'AAC',
+    'ffmpeg_opus': 'Opus',
+    'ffmpeg_mp3': 'MP3',
+    'obs_ffmpeg_flac': 'FLAC',
+  };
+  // 精确匹配
+  if (map[raw]) return map[raw];
+  // 模糊匹配
+  for (const [k, v] of Object.entries(map)) {
+    if (raw.includes(k.replace('obs_', ''))) return v;
+  }
+  // 返回原文去除 obs_ 前缀
+  return raw.replace(/^obs_/, '').replace(/_/g, ' ');
+}
+
+function prettyRateControl(v) {
+  if (v === undefined || v === null || v === '') return '--';
+  // NVENC / QSV / AMF 可能返回数值 0=CBR 1=VBR 2=CQP 3=lossless
+  // GetProfileParameter 返回字符串 "0"，GetOutputSettings 返回数字 0
+  var numericMap = { '0': 'CBR', '1': 'VBR', '2': 'CQP', '3': 'lossless', 0: 'CBR', 1: 'VBR', 2: 'CQP', 3: 'lossless' };
+  var m = { CBR: '恒定比特率 (CBR)', VBR: '可变比特率 (VBR)', CQP: '恒定质量 (CQP)', lossless: '无损', ICQ: '智能质量 (ICQ)', LA_CBR: '前瞻恒定 (LA_CBR)', LA_VBR: '前瞻可变 (LA_VBR)' };
+  var key = numericMap[v] || v;
+  var result = m[key] || String(key);
+  if (typeof _diag !== 'undefined') _diag('prettyRateCtrl', 'in=' + JSON.stringify(v) + ' (type=' + (typeof v) + ') key=' + key + ' → "' + result + '"');
+  return result;
+}
+function prettyPreset(v, encType) {
+  // NVENC: P1-P7
+  if (encType === 'nvenc') {
+    const labels = { p1:'最慢(最高质量)', p2:'较慢', p3:'快速(较低质量)', p4:'更快', p5:'慢速(较高质量)', p6:'最快(最低质量)', p7:'最快(最低质量)' };
+    var k = (v || '').toLowerCase();
+    return labels[k] ? v.toUpperCase() + ': ' + labels[k] : (v || '--');
+  }
+  // x264: speed presets
+  const x264Labels = { ultrafast:'极速', superfast:'超快', veryfast:'很快', faster:'较快', fast:'快', medium:'中等', slow:'慢', slower:'较慢', veryslow:'很慢', placebo:'极慢' };
+  return x264Labels[v] ? v + ' (' + x264Labels[v] + ')' : (v || '--');
+}
+function prettyTune(v) {
+  const nvenc = { hq: '高质量', ll: '低延迟', ull: '超低延迟', lossless: '无损质量', psy: '心理视觉' };
+  if (nvenc[v]) return nvenc[v];
+  // x264 tunes
+  const x264 = { film:'电影', animation:'动画', grain:'颗粒', stillimage:'静态图', psnr:'PSNR', ssim:'SSIM', fastdecode:'快速解码', zerolatency:'零延迟' };
+  return x264[v] || v || '--';
+}
+
+function encoderFamily(encoderId) {
+  if (!encoderId || encoderId === '--') return 'unknown';
+  if (encoderId.includes('nvenc_hevc') || encoderId.includes('nvenc_h265')) return 'nvenc_hevc';
+  if (encoderId.includes('nvenc')) return 'nvenc';
+  if (encoderId.includes('x264')) return 'x264';
+  if (encoderId.includes('qsv')) return 'qsv';
+  if (encoderId.includes('amf')) return 'amf';
+  if (encoderId.includes('apple')) return 'apple';
+  return 'other';
+}
+
+// ═══════════════════════════════════════
+// 编码器参数模板 — 每个编码器对应一组参数定义
+// ═══════════════════════════════════════
+const ENCODER_PARAMS = {
+  'x264': [
+    { key: 'rateControl', label: '比特率控制', icon: '🎚' },
+    { key: 'preset', label: 'CPU使用预设', icon: '⚡' },
+    { key: 'tune', label: '微调', icon: '🎯' },
+    { key: 'encoderProfile', label: '配置', icon: '📋' },
+    { key: 'gop', label: '关键帧间隔', icon: '⏱' },
+    { key: 'bFrames', label: 'B帧', icon: '🖼' },
+  ],
+  'nvenc': [
+    { key: 'rateControl', label: '比特率控制', icon: '🎚' },
+    { key: 'preset', label: '编码预设', icon: '⚡' },
+    { key: 'tune', label: '编码调节', icon: '🎯' },
+    { key: 'bFrames', label: 'B帧', icon: '🖼' },
+    { key: 'encoderProfile', label: '编码配置', icon: '📋' },
+    { key: 'gop', label: '关键帧间隔', icon: '⏱' },
+  ],
+  'nvenc_hevc': [
+    { key: 'rateControl', label: '比特率控制', icon: '🎚' },
+    { key: 'preset', label: '编码预设', icon: '⚡' },
+    { key: 'tune', label: '编码调节', icon: '🎯' },
+    { key: 'bFrames', label: 'B帧', icon: '🖼' },
+    { key: 'encoderProfile', label: '编码配置', icon: '📋' },
+    { key: 'gop', label: '关键帧间隔', icon: '⏱' },
+  ],
+  'qsv': [
+    { key: 'rateControl', label: '比特率控制', icon: '🎚' },
+    { key: 'preset', label: '编码预设', icon: '⚡' },
+    { key: 'tune', label: '编码调节', icon: '🎯' },
+    { key: 'bFrames', label: 'B帧', icon: '🖼' },
+    { key: 'encoderProfile', label: '编码配置', icon: '📋' },
+    { key: 'gop', label: '关键帧间隔', icon: '⏱' },
+  ],
+  'amf': [
+    { key: 'rateControl', label: '比特率控制', icon: '🎚' },
+    { key: 'preset', label: '编码预设', icon: '⚡' },
+    { key: 'tune', label: '编码调节', icon: '🎯' },
+    { key: 'bFrames', label: 'B帧', icon: '🖼' },
+    { key: 'encoderProfile', label: '编码配置', icon: '📋' },
+    { key: 'gop', label: '关键帧间隔', icon: '⏱' },
+  ],
+  'apple': [
+    { key: 'rateControl', label: '比特率控制', icon: '🎚' },
+    { key: 'encoderProfile', label: '编码配置', icon: '📋' },
+    { key: 'gop', label: '关键帧间隔', icon: '⏱' },
+    { key: 'bFrames', label: 'B帧', icon: '🖼' },
+  ],
+  // 通用/未知编码器默认参数
+  'unknown': [
+    { key: 'rateControl', label: '比特率控制', icon: '🎚' },
+    { key: 'gop', label: '关键帧间隔', icon: '⏱' },
+  ],
+};
+
+// ═══════════════════════════════════════
+// 数据层
+// ═══════════════════════════════════════
+const STORAGE_KEY = 'obs_dashboard_rooms';
+
+class RoomManager {
+  constructor() {
+    this.rooms = this.load();
+    this.nextId = this.rooms.length > 0 ? Math.max(...this.rooms.map(r => r.id)) + 1 : 1;
+    this.connections = new Map();
+    this.states = new Map();
+  }
+  load() { try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : []; } catch (e) { return []; } }
+  save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.rooms)); }
+  add(room) { room.id = this.nextId++; this.rooms.push(room); this.save(); return room; }
+  update(id, data) { const i = this.rooms.findIndex(r => r.id === id); if (i < 0) return null; Object.assign(this.rooms[i], data); this.save(); return this.rooms[i]; }
+  remove(id) { this.disconnect(id); this.rooms = this.rooms.filter(r => r.id !== id); this.save(); }
+  get(id) { return this.rooms.find(r => r.id === id); }
+  connect(room) {
+    const c = new OBSConnection(room, (s) => {
+      s._room = room; this.states.set(room.id, s); updateAllCards(); updateSummary();
+    });
+    this.connections.set(room.id, c); c.connect();
+  }
+  disconnect(id) { const c = this.connections.get(id); if (c) { c.destroy(); this.connections.delete(id); } this.states.delete(id); }
+  connectAll() { for (const r of this.rooms) this.connect(r); renderAll(); updateSummary(); }
+  getState(id) { return this.states.get(id) || { _room: this.get(id), status: 'offline', streaming: false, alerts: [] }; }
+  selectAudioInput(id, inputName) {
+    var numId = Number(id);
+    var s = this.states.get(numId); if (!s) { console.warn('[selectAudioInput] state not found for id:', numId); return; }
+    s.selectedAudioInput = inputName;
+    s.micName = inputName;
+    s.micLevelPeak = 0;
+    s.micLevelDbPeak = -100;
+    // 关键：同步到 OBSConnection 内部 state，防止 _emit() 浅拷贝覆盖
+    var conn = this.connections.get(numId);
+    if (conn && conn.state) {
+      conn.state.selectedAudioInput = inputName;
+      conn.state.micName = inputName;
+      console.log('[selectAudioInput] id=' + numId + ' → "' + inputName + '" (state + conn.state 双写)');
+    } else {
+      console.warn('[selectAudioInput] conn not found for id:', numId);
+    }
+    updateAllCards();
+  }
+}
+
+class OBSConnection {
+  constructor(room, onChange) {
+    this.room = room; this.onChange = onChange; this.ws = null; this.identified = false;
+    this.reconnectAttempts = 0; this.reconnectTimer = null; this.pollTimer = null;
+    this.requestId = 0; this.pendingRequests = new Map(); this.state = this._initState();
+    this._outputs = []; // OBS v5 output list cache
+    this._audioInputs = []; // OBS audio input names cache
+    this._profMap = {}; // OBS v5 GetProfileParameter requestId → {parameterCategory, parameterName} map
+    // 时序计算用
+    this._lb = undefined; this._lt = undefined;
+  }
+  _initState() {
+    return {
+      status: 'connecting', streaming: false, streamTime: 0,
+      // 视频
+      resolution: '--', fps: '--', fpsSet: null, bitrate: '--',
+      videoEncoder: '--', gop: '--', avgRenderTime: '--',
+      rateControl: '--', preset: '--', tune: '--', encoderProfile: '--', bFrames: '--',
+      _rawPresetNvenc: null, _rawPresetX264: null, _rawEncoderId: null, // 原始编码预设值 + 原始编码器ID
+      cpu: '--', memory: '--', disk: '--',
+      // 录制 / 虚拟摄像机
+      recording: false, recordingTime: 0, virtualCam: false,
+      // 麦克风
+      micName: '--', micVolumeDb: '--', micMuted: false, micLevelPeak: 0, micLevelDbPeak: -100,
+      audioInputs: [], selectedAudioInput: '--',
+      // 网络
+      droppedFrames: 0, outputTotalFrames: 0, dropRate: '--',
+      renderSkippedFrames: 0, renderTotalFrames: 0, renderDropRate: '--',
+      networkQuality: '--',
+      // 音频
+      audioEncoder: '--', audioBitrate: '--', audioSampleRate: '--', audioChannels: '--',
+      // 场景
+      scene: '--',
+      // 地址
+      pushUrl: '--', pullUrl: '--', workingPullUrl: null, pullSource: 'none', pullCandidates: [],
+      alerts: []
+    };
+  }
+  connect() {
+    if (this.ws) { try { this.ws.close(); } catch (e) {} }
+    const url = 'ws://' + this.room.host + ':' + this.room.port;
+    console.log('[OBS] Connect', url, this.room.name);
+    try {
+      this.ws = new WebSocket(url); this.ws.binaryType = 'arraybuffer';
+      this.ws.onopen = () => {};
+      this.ws.onmessage = (e) => this._onMsg(e);
+      this.ws.onclose = (e) => this._onClose(e);
+      this.ws.onerror = (e) => console.log('[OBS] Error', this.room.name);
+    } catch (e) { this._scheduleReconnect(); }
+  }
+  _onMsg(e) {
+    try {
+      const m = JSON.parse(typeof e.data === 'string' ? e.data : new TextDecoder().decode(e.data));
+      switch (m.op) { case 0: this._onHello(m.d); break; case 2: this._onIdentified(m.d); break; case 5: this._onEvent(m.d); break; case 7: this._onResponse(m.d); break; case 9: this._onBatchResp(m.d); break; }
+    } catch (e) {}
+  }
+  _onHello(d) {
+    const a = d.authentication;
+    const go = (as) => { const id = { op: 1, d: { rpcVersion: 1, eventSubscriptions: 1048575 } }; if (as) id.d.authentication = as; this._send(id); };
+    if (a && this.room.password) { const s = OBSAuth.sha256base64(this.room.password + a.salt); go(OBSAuth.sha256base64(s + a.challenge)); }
+    else { go(''); }
+  }
+  _onIdentified(d) {
+    console.log('[OBS] Identified', this.room.name);
+    this.identified = true; this.reconnectAttempts = 0;
+    this.state.status = 'connected'; this._emit(); this._startPoll();
+  }
+  _onEvent(d) {
+    // DEBUG: log event types (first 10 of each type)
+    this._evtCount = this._evtCount || {};
+    this._evtCount[d.eventType] = (this._evtCount[d.eventType] || 0) + 1;
+    if (this._evtCount[d.eventType] <= 2 || (this._evtCount[d.eventType] % 50 === 0)) {
+      console.log('[OBS EVENT]', this.room.name, d.eventType, '#' + this._evtCount[d.eventType],
+        d.eventType === 'InputVolumeMeters' ? '(inputs=' + ((d.eventData && d.eventData.inputs) ? d.eventData.inputs.length : 0) + ')' : '');
+    }
+    if (d.eventType === 'StreamStateChanged') {
+      this.state.streaming = d.eventData.outputActive; this.state.streamTime = d.eventData.outputDuration || 0; this._emit();
+    }
+    if (d.eventType === 'RecordStateChanged') {
+      this.state.recording = d.eventData.outputActive; this.state.recordingTime = d.eventData.outputDuration || 0; this._emit();
+    }
+    if (d.eventType === 'VirtualcamStateChanged') {
+      this.state.virtualCam = d.eventData.outputActive; this._emit();
+    }
+    if (d.eventType === 'InputVolumeMeters') {
+      this._lastObsMeterTs = Date.now();
+      var inputs = d.eventData.inputs || [];
+      var target = this.state.selectedAudioInput || this.state.micName;
+      // 诊断：首批事件打印可用输入
+      if (inputs.length > 0 && this._evtCount['InputVolumeMeters'] <= 3) {
+        console.log('[OBS METER] 可用输入:', inputs.map(function(inp){return inp.inputName;}).join(', '), '| 当前选中:', target);
+      }
+      for (var mi = 0; mi < inputs.length; mi++) {
+        if (inputs[mi].inputName !== target) continue;
+        var levels = inputs[mi].inputLevelsMul || [];
+        var peakMul = 0;
+        if (levels.length > 0) {
+          if (typeof levels[0] === 'number') {
+            for (var c = 0; c < levels.length; c++) { if (levels[c] > peakMul) peakMul = levels[c]; }
+          } else {
+            for (var c = 0; c < levels.length; c++) {
+              var ch = levels[c] || [];
+              for (var s = 0; s < ch.length; s++) { if (ch[s] > peakMul) peakMul = ch[s]; }
+            }
+          }
+        }
+        this.state.micLevelPeak = peakMul;
+        var dbs = inputs[mi].inputLevelsDb || [];
+        var peakDb = -100;
+        if (dbs.length > 0) {
+          if (typeof dbs[0] === 'number') {
+            for (var c2 = 0; c2 < dbs.length; c2++) { if (dbs[c2] > peakDb) peakDb = dbs[c2]; }
+          } else {
+            for (var c2 = 0; c2 < dbs.length; c2++) {
+              var ch2 = dbs[c2] || [];
+              for (var s2 = 0; s2 < ch2.length; s2++) { if (ch2[s2] > peakDb) peakDb = ch2[s2]; }
+            }
+          }
+        }
+        this.state.micLevelDbPeak = peakDb;
+        this.state.micName = target;
+        this._updateMicMeter();
+        return; // 匹配到就退出
+      }
+      // 没匹配到选中设备，清零
+      this.state.micLevelPeak = 0; this.state.micLevelDbPeak = -100; this._updateMicMeter();
+    }
+    if (d.eventType === 'SceneChanged') { this.state.scene = d.eventData.sceneName || '--'; this._emit(); }
+  }
+  _onResponse(d) { const cb = this.pendingRequests.get(d.requestId); if (cb) { cb(d); this.pendingRequests.delete(d.requestId); } }
+  _onBatchResp(d) {
+    const cb = this.pendingRequests.get(d.requestId); if (cb) { cb(d); this.pendingRequests.delete(d.requestId); }
+    if (d.results) { for (const r of d.results) { const cb2 = this.pendingRequests.get(r.requestId); if (cb2) cb2(r); this.pendingRequests.delete(r.requestId); } }
+  }
+  _onClose(e) {
+    console.log('[OBS] Closed', this.room.name, 'code:', e ? e.code : 0);
+    this.identified = false; this.ws = null; this._stopPoll();
+    this.state.status = 'offline'; this.state.streaming = false;
+    this.state.recording = false; this.state.virtualCam = false;
+    this.state.micName = '--'; this.state.micVolumeDb = '--'; this.state.micMuted = false; this.state.micLevelPeak = 0; this.state.micLevelDbPeak = -100;
+    this.state.audioInputs = []; this.state.selectedAudioInput = '--';
+    this._emit(); this._scheduleReconnect();
+  }
+  _scheduleReconnect() {
+    const d = Math.min(2000 * Math.pow(2, this.reconnectAttempts), 30000); this.reconnectAttempts++;
+    this.state.status = 'reconnecting'; this._emit();
+    this.reconnectTimer = setTimeout(() => this.connect(), d);
+  }
+  _startPoll() { this._stopPoll(); this._poll(); this.pollTimer = setInterval(() => this._poll(), 2000); }
+  _stopPoll() { if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; } }
+  async _poll() {
+    if (!this.identified || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    var self = this;
+    // 重置原始编码预设值（每轮重新采集）
+    this.state._rawPresetNvenc = null;
+    this.state._rawPresetX264 = null;
+    var bid = 'b' + this.room.id + '_' + (++this.requestId);
+    var requests = [
+      { requestId: bid + '_1', requestType: 'GetStreamStatus' },
+      { requestId: bid + '_2', requestType: 'GetStats' },
+      { requestId: bid + '_3', requestType: 'GetVideoSettings' },
+      { requestId: bid + '_4', requestType: 'GetSceneList' },
+      { requestId: bid + '_5', requestType: 'GetStreamServiceSettings' },
+      { requestId: bid + '_5r', requestType: 'GetRecordStatus' },
+      { requestId: bid + '_5v', requestType: 'GetVirtualCamStatus' },
+      { requestId: bid + '_5i', requestType: 'GetInputList' },
+      { requestId: bid + '_6', requestType: 'GetOutputList' },
+      // Advanced 模式：从 Profile 读取编码器参数
+      { requestId: bid + '_7', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'AdvOut', parameterName: 'Encoder' } },
+      { requestId: bid + '_8', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'AdvOut', parameterName: 'Track1Bitrate' } },
+      // 采样率：从 Audio 类别读取
+      { requestId: bid + '_9', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'Audio', parameterName: 'SampleRate' } },
+      // 编码器细粒度参数 — Advanced 模式存在 StreamEncoder 类别下（AdvOut 类别仅存 Encoder/bitrate）
+      // NVENC: rate_control, preset, tune, profile, bf
+      // x264:  rate_control, cpu_usage, tune, profile
+      // 先查 AdvOut（兼容 Simple 模式），再查 StreamEncoder（Advanced 模式）
+      { requestId: bid + '_10', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'AdvOut', parameterName: 'rate_control' } },
+      { requestId: bid + '_11', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'AdvOut', parameterName: 'preset' } },
+      { requestId: bid + '_12', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'AdvOut', parameterName: 'cpu_usage' } },
+      { requestId: bid + '_13', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'AdvOut', parameterName: 'tune' } },
+      { requestId: bid + '_14', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'AdvOut', parameterName: 'profile' } },
+      { requestId: bid + '_15', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'AdvOut', parameterName: 'bf' } },
+      // StreamEncoder 类别（Advanced 模式编码器参数实际存储位置）
+      // cpu_usage 在前，preset 在后 — NVENC preset 覆盖可能残留的 x264 cpu_usage 值
+      { requestId: bid + '_16', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'StreamEncoder', parameterName: 'rate_control' } },
+      { requestId: bid + '_17', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'StreamEncoder', parameterName: 'cpu_usage' } },
+      { requestId: bid + '_18', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'StreamEncoder', parameterName: 'preset' } },
+      { requestId: bid + '_19', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'StreamEncoder', parameterName: 'tune' } },
+      { requestId: bid + '_20', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'StreamEncoder', parameterName: 'profile' } },
+      { requestId: bid + '_21', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'StreamEncoder', parameterName: 'bf' } }
+    ];
+    // 存储 profile 参数名映射（response 里没有 requestData）
+    if (!this._profMap) this._profMap = {};
+    for (var pi = 6; pi < requests.length; pi++) {
+      if (requests[pi].requestType === 'GetProfileParameter') {
+        this._profMap[requests[pi].requestId] = requests[pi].requestData;
+      }
+    }
+    var batch = { op: 8, d: { requestId: bid, haltOnFailure: false, requests: requests } };
+    var p = new Promise(function(rv) {
+      var t = setTimeout(function() { rv(null); }, 3000);
+      self.pendingRequests.set(bid, function(d) { clearTimeout(t); rv(d); });
+      for (var i = 0; i < batch.d.requests.length; i++) {
+        self.pendingRequests.set(batch.d.requests[i].requestId, function() {});
+      }
+    });
+    try { this._send(batch); } catch (e) { return; }
+    var result = await p; if (!result) return; if (!result.results) return;
+    for (var j = 0; j < result.results.length; j++) this._parse(result.results[j]);
+
+    // Phase 2: query output settings for each discovered output (encoder / GOP / audio params)
+    // Also ensure we query adv_stream (Advanced mode streaming output) even if not in list
+    var outputs = this._outputs || [];
+    var seenNames = {};
+    if (outputs.length > 0) {
+      var bid2 = 'b' + this.room.id + '_o' + '_' + (++this.requestId);
+      var outReqs = [];
+      for (var k = 0; k < outputs.length; k++) {
+        var raw = outputs[k];
+        var oname = (typeof raw === 'string') ? raw : (raw.outputName || raw.name || '');
+        if (oname && !seenNames[oname]) {
+          seenNames[oname] = true;
+          outReqs.push({ requestId: bid2 + '_' + k, requestType: 'GetOutputSettings', requestData: { outputName: oname } });
+        }
+      }
+      // 确保 adv_stream 也在查询列表中（Advanced 模式推流输出）
+      if (!seenNames['adv_stream']) {
+        outReqs.push({ requestId: bid2 + '_adv', requestType: 'GetOutputSettings', requestData: { outputName: 'adv_stream' } });
+      }
+      // advanced_video_stream 是编码器配置 section 名，不是 output 名，已移除
+      var batch2 = { op: 8, d: { requestId: bid2, haltOnFailure: false, requests: outReqs } };
+      var p2 = new Promise(function(rv2) {
+        var t2 = setTimeout(function() { rv2(null); }, 3000);
+        self.pendingRequests.set(bid2, function(d) { clearTimeout(t2); rv2(d); });
+        for (var m = 0; m < batch2.d.requests.length; m++) {
+          self.pendingRequests.set(batch2.d.requests[m].requestId, function() {});
+        }
+      });
+      try { this._send(batch2); } catch(e) {}
+      var result2 = await p2;
+      if (result2 && result2.results) {
+        for (var n = 0; n < result2.results.length; n++) this._parse(result2.results[n]);
+      }
+    }
+
+    // Phase 2.5: 查询选中音频输入音量（兜底数据源）
+    var selAudio = this.state.selectedAudioInput;
+    if (selAudio && selAudio !== '--') {
+      var bid25 = 'b' + this.room.id + '_a_' + (++this.requestId);
+      var aReqs = [{ requestId: bid25, requestType: 'GetInputVolume', requestData: { inputName: selAudio }, _pollMic: true }];
+      var batch25 = { op: 8, d: { requestId: bid25, haltOnFailure: false, requests: aReqs } };
+      var p25 = new Promise(function(rv25) {
+        var t25 = setTimeout(function() { rv25(null); }, 3000);
+        self.pendingRequests.set(bid25, function(d) { clearTimeout(t25); rv25(d); });
+        self.pendingRequests.set(bid25, function() {});
+      });
+      try { this._send(batch25); } catch(e) {}
+      var result25 = await p25;
+      if (result25 && result25.results) {
+        for (var an = 0; an < result25.results.length; an++) this._parse(result25.results[an]);
+      }
+    }
+
+    // Phase 3: 用编码器原始 ID 作为 parameterCategory 查询编码器内部参数
+    // OBS 在 basic.ini 中以编码器 ID 为 section 名存储参数（如 [ffmpeg_nvenc]、[obs_x264]）
+    // 但部分 OBS 版本（特别是 obs-nvenc）使用 dedicated section 名如 advanced_video_stream
+    var rawEncId = this.state._rawEncoderId;
+    if (typeof _diag !== 'undefined') _diag('rateCtrl-P3-start', 'rawEncId=' + (rawEncId||'null') + ' encFam=' + (rawEncId && rawEncId !== '--' ? encoderFamily(rawEncId) : 'N/A'));
+    if (rawEncId && rawEncId !== '--') {
+      var encFam = encoderFamily(rawEncId);
+      var encParamNames = [];
+      // 根据编码器类型，准备要查询的参数名
+      if (encFam === 'nvenc' || encFam === 'nvenc_hevc' || encFam === 'qsv' || encFam === 'amf') {
+        encParamNames = ['rate_control', 'preset', 'tune', 'bf', 'profile', 'bitrate'];
+      } else if (encFam === 'x264') {
+        encParamNames = ['rate_control', 'cpu_usage', 'tune', 'profile', 'bitrate', 'bf'];
+      } else {
+        encParamNames = ['rate_control', 'bitrate', 'preset'];
+      }
+      var bid3 = 'b' + this.room.id + '_enc_' + (++this.requestId);
+      var encReqs = [];
+      // 尝试多个可能的 category 名（OBS 不同版本/配置用不同的 section 名）
+      var catCandidates = [rawEncId];
+      // Advanced 输出模式的 NVENC 可能用 advanced_video_stream
+      if (encFam === 'nvenc' || encFam === 'nvenc_hevc') {
+        catCandidates.push('advanced_video_stream');
+      }
+      // x264 编码器可能用 obs_x264
+      if (encFam === 'x264' && rawEncId !== 'obs_x264') {
+        catCandidates.push('obs_x264');
+      }
+      if (typeof _diag !== 'undefined') _diag('rateCtrl-P3-cats', 'catCandidates=[' + catCandidates.join(',') + '] params=[' + encParamNames.join(',') + ']');
+      for (var ci = 0; ci < catCandidates.length; ci++) {
+        for (var ei = 0; ei < encParamNames.length; ei++) {
+          encReqs.push({
+            requestId: bid3 + '_c' + ci + '_' + ei,
+            requestType: 'GetProfileParameter',
+            requestData: { parameterCategory: catCandidates[ci], parameterName: encParamNames[ei] }
+          });
+        }
+      }
+      if (encReqs.length > 0) {
+        // 注册 _profMap
+        for (var epi = 0; epi < encReqs.length; epi++) {
+          self._profMap[encReqs[epi].requestId] = encReqs[epi].requestData;
+        }
+        var batch3 = { op: 8, d: { requestId: bid3, haltOnFailure: false, requests: encReqs } };
+        var p3 = new Promise(function(rv3) {
+          var t3 = setTimeout(function() { rv3(null); }, 3000);
+          self.pendingRequests.set(bid3, function(d) { clearTimeout(t3); rv3(d); });
+          for (var eq = 0; eq < batch3.d.requests.length; eq++) {
+            self.pendingRequests.set(batch3.d.requests[eq].requestId, function() {});
+          }
+        });
+        try { this._send(batch3); } catch(e) {}
+        var result3 = await p3;
+        if (result3 && result3.results) {
+          if (typeof _diag !== 'undefined') _diag('rateCtrl-P3-results', 'got ' + result3.results.length + ' results');
+          for (var nr = 0; nr < result3.results.length; nr++) this._parse(result3.results[nr]);
+          if (typeof _diag !== 'undefined') _diag('rateCtrl-P3-after', 'after Phase3: rateControl=' + this.state.rateControl + ' preset=' + this.state._rawPresetNvenc + ' tune=' + this.state.tune + ' bf=' + this.state.bFrames + ' profile=' + this.state.encoderProfile);
+        }
+      }
+    }
+
+    // Phase 4: 本地 HTTP fallback — 读取 OBS 编码器 JSON 配置文件
+    // OBS Advanced 模式把编码器参数（rate_control, bitrate, preset 等）存储在
+    // streamEncoder.json 等 JSON 文件中，GetProfileParameter 无法访问这些文件。
+    // start-dashboard.js (localhost:8392) 内置读取 OBS 编码器配置文件，提供 HTTP API。
+    if (this.state.rateControl === '--' && rawEncId && rawEncId !== '--') {
+      // 初始化重试计数器（persist across polls）
+      if (typeof this._p4Retries === 'undefined') this._p4Retries = 0;
+      if (this._p4Retries < 5) {
+        if (!this._p4DidLog || this._p4Retries <= 1) {
+          if (typeof _diag !== 'undefined') _diag('rateCtrl-P4', 'try #' + (this._p4Retries + 1) + ' http://127.0.0.1:8392');
+        }
+        this._p4Retries++;
+        try {
+          var encResp = await fetch('http://127.0.0.1:8392/encoder-settings');
+          if (encResp.ok) {
+            var encData = await encResp.json();
+            if (typeof _diag !== 'undefined') _diag('rateCtrl-P4-ok', 'got ' + Object.keys(encData).join(','));
+            var encCfg = encData.streamEncoder || encData.recordEncoder || encData[Object.keys(encData)[0]];
+            if (encCfg) {
+              if (encCfg.rate_control !== undefined && this.state.rateControl === '--') {
+                this.state.rateControl = prettyRateControl(encCfg.rate_control);
+                if (typeof _diag !== 'undefined') _diag('rateCtrl-P4', 'rate_control=' + encCfg.rate_control + ' → ' + this.state.rateControl);
+              }
+              if (encCfg.bitrate !== undefined && this.state.bitrate === '--') {
+                this.state.bitrate = encCfg.bitrate + ' Kbps';
+              }
+              if (encCfg.preset !== undefined) {
+                if (encFam === 'nvenc' || encFam === 'nvenc_hevc') {
+                  if (!this.state._rawPresetNvenc) this.state._rawPresetNvenc = String(encCfg.preset);
+                } else if (encFam === 'x264') {
+                  if (!this.state._rawPresetX264) this.state._rawPresetX264 = String(encCfg.preset);
+                }
+              }
+            }
+            this._p4DidLog = true;
+          } else {
+            if (!this._p4DidLog && typeof _diag !== 'undefined') _diag('rateCtrl-P4', 'helper HTTP ' + encResp.status);
+          }
+        } catch(e) {
+          if (!this._p4DidLog && typeof _diag !== 'undefined') _diag('rateCtrl-P4', 'helper未启动? ' + e.message);
+        }
+      }
+    }
+
+    // 更新拉流地址
+    var resolved = resolvePullUrl(this.room, this.state);
+    if (resolved.url) {
+      this.state.pullUrl = resolved.url;
+      this.state.workingPullUrl = resolved.url;
+      this.state.pullSource = resolved.source;
+    }
+    if (resolved.candidates && resolved.candidates.length > 0) {
+      this.state.pullCandidates = resolved.candidates;
+    }
+    // Advanced RTMP 模式：音频编码器固定 AAC（ProfileParam 不暴露此项）
+    if (this.state.audioEncoder === '--' && this.state.videoEncoder !== '--') {
+      this.state.audioEncoder = 'AAC (RTMP)';
+    }
+    // 默认采样率和声道（RTMP 典型值）
+    if (this.state.audioSampleRate === '--') this.state.audioSampleRate = '48 kHz';
+    if (this.state.audioChannels === '--') this.state.audioChannels = '立体声';
+    // 根据编码器类型智能选择预设值（避免 NVENC/x264 残留值互相覆盖）
+    var ef = encoderFamily(this.state.videoEncoder);
+    if (ef === 'nvenc' || ef === 'nvenc_hevc') {
+      this.state.preset = this.state._rawPresetNvenc ? prettyPreset(this.state._rawPresetNvenc, 'nvenc') : '--';
+    } else if (ef === 'x264') {
+      this.state.preset = this.state._rawPresetX264 ? prettyPreset(this.state._rawPresetX264, 'x264') : '--';
+    } else {
+      this.state.preset = this.state._rawPresetNvenc ? prettyPreset(this.state._rawPresetNvenc, 'nvenc')
+                       : (this.state._rawPresetX264 ? prettyPreset(this.state._rawPresetX264, 'x264') : '--');
+    }
+    // GOP：Advanced 模式下编码器配置不暴露给 ProfileParam，OBS RTMP 默认 2s
+    if (this.state.gop === '--' && this.state.fps) {
+      var fps = parseInt(this.state.fps) || parseInt(this.state.fpsSet) || 30;
+      this.state.gop = '2s (' + (2 * fps) + '帧)';
+    }
+    if (typeof _diag !== 'undefined') _diag('rateCtrl-F', 'FINAL: rateControl=' + this.state.rateControl + ' rawEncId=' + (this.state._rawEncoderId||'null') + ' videoEncoder=' + this.state.videoEncoder);
+    this._emit();
+  }
+  _parse(r) {
+    // DEBUG: log any failed request
+    if (r.requestStatus && r.requestStatus.code !== 100) {
+      var failMsg = r.requestType + ' FAIL code=' + r.requestStatus.code;
+      if (r.requestStatus.comment) failMsg += ' (' + r.requestStatus.comment + ')';
+      console.warn('[OBS DIAG]', failMsg);
+      if (typeof _diag !== 'undefined') _diag('REQ-FAIL', failMsg);
+      return;
+    }
+    var d = r.responseData; if (!d) return;
+    // DEBUG: log raw response for key request types
+    if (r.requestType === 'GetOutputList') {
+      console.log('[OBS DIAG] GetOutputList RAW:', JSON.stringify(d));
+      if (typeof _diag !== 'undefined') {
+        var c = d.outputs ? d.outputs.length : 0;
+        _diag('OutputList', 'got ' + c + ' outputs: ' + JSON.stringify(d.outputs ? d.outputs.map(function(o){return o.outputName||o.name||JSON.stringify(o);}) : 'null'));
+      }
+    }
+    if (r.requestType === 'GetOutputSettings') {
+      console.log('[OBS DIAG] GetOutputSettings RAW:', JSON.stringify(d).substring(0, 600));
+      if (typeof _diag !== 'undefined') {
+        _diag('OutputSettings', 'outputName=' + (d.outputName||'?') + ' settings keys=' + (d.outputSettings ? Object.keys(d.outputSettings).join(',') : 'null'));
+      }
+    }
+    if (r.requestType === 'GetProfileParameter') {
+      console.log('[OBS DIAG] GetProfileParameter RAW:', JSON.stringify(d));
+      if (typeof _diag !== 'undefined') {
+        var meta = this._profMap && this._profMap[r.requestId];
+        _diag('ProfileParam', (meta ? meta.parameterCategory + '/' + meta.parameterName : '?') + ' = ' + (d.parameterValue || '(null)'));
+      }
+    }
+    switch (r.requestType) {
+      case 'GetStreamStatus': {
+        this.state.streaming = d.outputActive;
+        this.state.streamTime = d.outputDuration || 0;
+        if (d.outputBytes !== undefined) {
+          const n = Date.now();
+          if (this._lb !== undefined && this._lt !== undefined) {
+            const bd = d.outputBytes - this._lb, td = (n - this._lt) / 1000;
+            if (td > 0.5 && bd > 0) this.state.bitrate = Math.round(bd * 8 / td / 1000) + ' kbps';
+          }
+          this._lb = d.outputBytes; this._lt = n;
+        }
+        break;
+      }
+      case 'GetStats': {
+        this.state.cpu = d.cpuUsage !== undefined ? Math.round(d.cpuUsage) + '%' : '--';
+        this.state.memory = d.memoryUsage !== undefined ? Math.round(d.memoryUsage) + ' MB' : '--';
+        this.state.disk = d.availableDiskSpace !== undefined ? (d.availableDiskSpace / 1024).toFixed(1) + ' GB' : '--';
+        this.state.fps = d.activeFps !== undefined ? Math.round(d.activeFps) : '--';
+        this.state.avgRenderTime = d.averageFrameRenderTime !== undefined ? d.averageFrameRenderTime.toFixed(1) + ' ms' : '--';
+        // 网络丢帧
+        this.state.droppedFrames = d.outputSkippedFrames || 0;
+        this.state.outputTotalFrames = d.outputTotalFrames || 0;
+        // 渲染丢帧
+        this.state.renderSkippedFrames = d.renderSkippedFrames || 0;
+        this.state.renderTotalFrames = d.renderTotalFrames || 0;
+        break;
+      }
+      case 'GetVideoSettings': {
+        this.state.resolution = d.baseWidth + 'x' + d.baseHeight;
+        if (d.fpsNumerator && d.fpsDenominator) this.state.fpsSet = Math.round(d.fpsNumerator / d.fpsDenominator);
+        break;
+      }
+      case 'GetSceneList': {
+        if (d.currentProgramSceneName) this.state.scene = d.currentProgramSceneName;
+        break;
+      }
+      case 'GetStreamServiceSettings': {
+        if (d.streamServiceType) {
+          const s = d.streamServiceSettings || {};
+          const svr = s.server || s.bwtest || s.service || '';
+          const key = s.key || s.stream_key || '';
+          if (svr) this.state.pushUrl = svr + (key ? '/' + key : '');
+        }
+        break;
+      }
+      case 'GetRecordStatus': {
+        this.state.recording = d.outputActive;
+        this.state.recordingTime = d.outputDuration || 0;
+        break;
+      }
+      case 'GetVirtualCamStatus': {
+        this.state.virtualCam = d.outputActive;
+        break;
+      }
+      case 'GetInputList': {
+        var inputs = d.inputs || [];
+        var audioInputs = [];
+        var firstMicName = '--';
+        for (var ii = 0; ii < inputs.length; ii++) {
+          var ik = (inputs[ii].inputKind || '').toLowerCase();
+          var iname = inputs[ii].inputName || '';
+          // 匹配所有音频类设备：麦克风、桌面音频、辅助音频等
+          if (ik.indexOf('audio') >= 0 || ik.indexOf('mic') >= 0 || ik.indexOf('aux') >= 0 || ik.indexOf('wasapi') >= 0) {
+            audioInputs.push(iname);
+            if (firstMicName === '--' && iname) firstMicName = iname;
+          }
+        }
+        this._audioInputs = audioInputs;
+        this.state.audioInputs = audioInputs;
+        // 用户没选过 或 之前选的设备已不在列表中 → 默认第一个
+        if (this.state.selectedAudioInput === '--' || audioInputs.indexOf(this.state.selectedAudioInput) < 0) {
+          this.state.selectedAudioInput = firstMicName;
+          this.state.micName = firstMicName;
+          _diag('AUDIO-INIT', '默认音源="' + firstMicName + '" (列表:' + audioInputs.join(',') + ')');
+        } else {
+          _diag('AUDIO-KEEP', '保持选中="' + this.state.selectedAudioInput + '" (列表:' + audioInputs.join(',') + ')');
+        }
+        break;
+      }
+      case 'GetInputVolume': {
+        if (d.inputVolumeDb !== undefined) {
+          this.state.micVolumeDb = d.inputVolumeDb.toFixed(1) + ' dB';
+        } else if (d.inputVolumeMul !== undefined) {
+          this.state.micVolumeDb = (20 * Math.log10(Math.max(d.inputVolumeMul, 0.0001))).toFixed(1) + ' dB';
+        }
+        if (d.inputVolumeMul !== undefined && d.inputVolumeMul <= 0.0001) {
+          this.state.micMuted = true;
+        } else {
+          this.state.micMuted = false;
+        }
+        // 兜底：如果 InputVolumeMeters 事件没到达，用轮询数据驱动电平条
+        if (!this._lastObsMeterTs || (Date.now() - this._lastObsMeterTs) > 5000) {
+          this.state.micLevelPeak = (d.inputVolumeMul !== undefined) ? Math.min(d.inputVolumeMul, 1) : 0;
+          this.state.micLevelDbPeak = (d.inputVolumeDb !== undefined) ? d.inputVolumeDb : ((d.inputVolumeMul !== undefined && d.inputVolumeMul > 0.0001) ? (20 * Math.log10(d.inputVolumeMul)) : -100);
+          this._updateMicMeter();
+        }
+        break;
+      }
+      case 'GetProfileParameter': {
+        // 用于 Advanced / Audio / 编码器内部参数读取
+        if (!d.parameterValue) {
+          if (typeof _diag !== 'undefined' && meta && meta.parameterName === 'rate_control') _diag('rateCtrl-PN', 'NULL from cat=' + meta.parameterCategory + ' param=rate_control  (requestId=' + r.requestId + ')');
+          break;
+        }
+        // ★ 新增：把 GetProfileParameter 的完整原始响应打到诊断面板
+        if (typeof _diag !== 'undefined' && meta) {
+          _diag('ProfParam-RAW', 'cat=' + meta.parameterCategory + ' param=' + meta.parameterName + ' value=' + JSON.stringify(d.parameterValue) + ' def=' + JSON.stringify(d.defaultParameterValue));
+        }
+        var v = d.parameterValue;
+        var meta = this._profMap && this._profMap[r.requestId];
+        if (!meta) break;
+        if (meta.parameterCategory === 'AdvOut' || meta.parameterCategory === 'StreamEncoder') {
+          switch (meta.parameterName) {
+            case 'Encoder': this.state.videoEncoder = prettyEncoder(v); this.state._rawEncoderId = v; break;
+            case 'Track1Bitrate': this.state.audioBitrate = parseInt(v) + ' kbps'; break;
+            case 'rate_control': this.state.rateControl = prettyRateControl(v); if (typeof _diag !== 'undefined') _diag('rateCtrl-P1', 'AdvOut/StreamEncoder rate_control=' + v + ' → ' + this.state.rateControl + ' (cat=' + meta.parameterCategory + ')'); break;
+            case 'preset': this.state._rawPresetNvenc = v; break;
+            case 'cpu_usage': this.state._rawPresetX264 = v; break;
+            case 'tune': this.state.tune = prettyTune(v); break;
+            case 'profile': this.state.encoderProfile = (v === 'none' || !v) ? '无' : v; break;
+            case 'bf': this.state.bFrames = parseInt(v) >= 0 ? parseInt(v) + ' 帧' : '--'; break;
+            case 'bitrate': this.state.bitrate = parseInt(v) + ' kbps'; break;
+          }
+        } else if (meta.parameterCategory === 'Audio') {
+          switch (meta.parameterName) {
+            case 'SampleRate': this.state.audioSampleRate = v + ' Hz'; break;
+          }
+        } else {
+          // 编码器内部参数（category = 编码器 ID，如 ffmpeg_nvenc、obs_x264）
+          switch (meta.parameterName) {
+            case 'rate_control': this.state.rateControl = prettyRateControl(v); if (typeof _diag !== 'undefined') _diag('rateCtrl-P3', 'EncoderSection rate_control=' + v + ' → ' + this.state.rateControl + ' (cat=' + meta.parameterCategory + ')'); break;
+            case 'preset': this.state._rawPresetNvenc = v; break;
+            case 'cpu_usage': this.state._rawPresetX264 = v; break;
+            case 'tune': this.state.tune = prettyTune(v); break;
+            case 'profile': this.state.encoderProfile = (v === 'none' || !v) ? '无' : v; break;
+            case 'bf': this.state.bFrames = parseInt(v) >= 0 ? parseInt(v) + ' 帧' : '--'; break;
+            case 'bitrate': this.state.bitrate = parseInt(v) + ' kbps'; break;
+          }
+        }
+        break;
+      }
+      case 'GetOutputList': {
+        this._outputs = d.outputs || [];
+        break;
+      }
+      case 'GetOutputSettings': {
+        // ★ 强力诊断：把 outputSettings 的完整内容打到诊断面板
+        if (typeof _diag !== 'undefined') {
+          var osFullKeys = d.outputSettings ? Object.keys(d.outputSettings).join(',') : 'NO-outputSettings';
+          _diag('OutSettings-RAW', 'outputName=' + (d.outputName||'?') + ' ★ outputSettings.keys=[' + osFullKeys + ']');
+          if (d.outputSettings) {
+            try {
+              var osStr = JSON.stringify(d.outputSettings);
+              _diag('OutSettings-JSON', '完整内容(前1200字): ' + osStr.substring(0, 1200));
+              // 专门检查 encoderSettings
+              if (d.outputSettings.encoderSettings) {
+                _diag('EncSet-Keys', 'encoderSettings.keys=[' + Object.keys(d.outputSettings.encoderSettings).join(',') + ']');
+                _diag('EncSet-All', 'encoderSettings全文: ' + JSON.stringify(d.outputSettings.encoderSettings));
+              } else {
+                _diag('EncSet-Keys', 'encoderSettings 不存在！outputSettings一等字段: ' + osFullKeys);
+              }
+            } catch(e) { _diag('OutSettings-ERR', e.message); }
+          }
+        }
+        console.log('[OBS DIAG] GetOutputSettings FULL d=', JSON.stringify(d).substring(0, 3000));
+        var os = d.outputSettings;
+        if (!os) break;
+        // 视频编码器（仅在有值时覆盖，避免覆盖 Phase1 ProfileParam 的结果）
+        if (os.type === 'simple' || os.streamEncoderSettings) {
+          var ses = os.streamEncoderSettings || {};
+          if (ses.encoder || ses.encoderId) {
+            this.state.videoEncoder = prettyEncoder(ses.encoder || ses.encoderId);
+          }
+          // GOP (keyint_sec)
+          if (ses.keyint_sec !== undefined) {
+            var fps = parseInt(this.state.fps) || parseInt(this.state.fpsSet) || 30;
+            this.state.gop = ses.keyint_sec + 's (' + (ses.keyint_sec * fps) + '帧)';
+          }
+          // 音频编码器和码率（仅在有值时覆盖）
+          var aes = os.streamAudioEncoderSettings || {};
+          if (aes.encoder || aes.encoderId) {
+            this.state.audioEncoder = prettyEncoder(aes.encoder || aes.encoderId);
+          }
+          if (aes.bitrate !== undefined) this.state.audioBitrate = aes.bitrate + ' kbps';
+          if (aes.sampleRate !== undefined) this.state.audioSampleRate = aes.sampleRate + ' Hz';
+          if (aes.channels !== undefined) this.state.audioChannels = aes.channels === 1 ? '单声道' : aes.channels === 2 ? '立体声' : aes.channels + ' 声道';
+        } else if (os.type === 'advanced' || os.streamEncoderId) {
+          if (os.streamEncoderId) {
+            this.state.videoEncoder = prettyEncoder(os.streamEncoderId);
+            this.state._rawEncoderId = os.streamEncoderId;
+          }
+          // Advanced mode: 从 encoderSettings 提取所有编码器参数
+          if (os.encoderSettings) {
+            var es = os.encoderSettings;
+            // DEBUG: dump all encoderSettings keys
+            console.log('[OBS DIAG] Advanced encoderSettings keys:', Object.keys(es).join(','));
+            console.log('[OBS DIAG] Advanced encoderSettings RAW:', JSON.stringify(es).substring(0, 800));
+            if (typeof _diag !== 'undefined') {
+              _diag('EncSettings', 'keys: ' + Object.keys(es).join(','));
+            }
+            // 通用参数
+            if (es.bitrate !== undefined) this.state.bitrate = es.bitrate + ' kbps';
+            if (es.keyint_sec !== undefined) {
+              var fps2 = parseInt(this.state.fps) || parseInt(this.state.fpsSet) || 30;
+              this.state.gop = es.keyint_sec + 's (' + (es.keyint_sec * fps2) + '帧)';
+            }
+            if (es.rate_control !== undefined) {
+              this.state.rateControl = prettyRateControl(es.rate_control);
+              if (typeof _diag !== 'undefined') _diag('rateCtrl-A', 'encoderSettings.rate_control=' + JSON.stringify(es.rate_control) + ' → ' + this.state.rateControl);
+            // ★ 兼容：部分 OBS 版本用驼峰命名 rateControl
+            } else if (es.rateControl !== undefined) {
+              this.state.rateControl = prettyRateControl(es.rateControl);
+              if (typeof _diag !== 'undefined') _diag('rateCtrl-A2', 'encoderSettings.rateControl=' + JSON.stringify(es.rateControl) + ' → ' + this.state.rateControl);
+            } else {
+              if (typeof _diag !== 'undefined') _diag('rateCtrl-A', 'encoderSettings.rate_control NOT FOUND (keys: ' + Object.keys(es).join(',') + ')');
+            }
+            if (es.preset !== undefined) this.state._rawPresetNvenc = es.preset;
+            if (es.cpu_usage !== undefined) this.state._rawPresetX264 = es.cpu_usage;
+            if (es.tune !== undefined) this.state.tune = prettyTune(es.tune);
+            if (es.profile !== undefined) this.state.encoderProfile = (es.profile === 'none' || !es.profile) ? '无' : es.profile;
+            if (es.bf !== undefined) this.state.bFrames = parseInt(es.bf) >= 0 ? parseInt(es.bf) + ' 帧' : '--';
+            // NVENC 特定: NV12, multipass, lookahead, b_ref_mode, aq
+          }
+          if (os.streamAudioEncoderId) {
+            this.state.audioEncoder = prettyEncoder(os.streamAudioEncoderId);
+          }
+          // Advanced 模式音频设置
+          if (os.streamAudioEncoderSettings) {
+            var aes = os.streamAudioEncoderSettings;
+            if (aes.bitrate !== undefined) this.state.audioBitrate = aes.bitrate + ' kbps';
+            if (aes.sampleRate !== undefined) this.state.audioSampleRate = aes.sampleRate + ' Hz';
+            if (aes.channels !== undefined) this.state.audioChannels = aes.channels === 1 ? '单声道' : aes.channels === 2 ? '立体声' : aes.channels + ' 声道';
+          }
+        }
+        break;
+      }
+    }
+  }
+  _send(o) { if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(o)); }
+  _emit() {
+    // 计算网络质量指标
+    if (this.state.outputTotalFrames > 0) {
+      const dr = (this.state.droppedFrames / this.state.outputTotalFrames * 100);
+      this.state.dropRate = dr.toFixed(2) + '%';
+      // 网络质量评级
+      if (dr < 0.1) this.state.networkQuality = '优秀';
+      else if (dr < 1) this.state.networkQuality = '良好';
+      else if (dr < 5) this.state.networkQuality = '一般';
+      else this.state.networkQuality = '差';
+    }
+    if (this.state.renderTotalFrames > 0) {
+      const rr = (this.state.renderSkippedFrames / this.state.renderTotalFrames * 100);
+      this.state.renderDropRate = rr.toFixed(2) + '%';
+    }
+
+    const a = [];
+    if (this.state.droppedFrames > 100) a.push({ type: 'drop', msg: '丢帧:' + this.state.droppedFrames });
+    if (this.state.cpu !== '--' && parseInt(this.state.cpu) > 80) a.push({ type: 'cpu', msg: 'CPU:' + this.state.cpu });
+    const f = parseInt(this.state.fps);
+    if (this.state.fpsSet && f && f < this.state.fpsSet * 0.7) a.push({ type: 'lowfps', msg: '帧率:' + this.state.fps });
+    if (this.state.status === 'reconnecting') a.push({ type: 'reconnect', msg: '重连中' });
+    this.state.alerts = a;
+    this.onChange({ ...this.state });
+  }
+  _updateMicMeter() {
+    var now = Date.now();
+    if (now - (this._lastMeterUpdate || 0) < 30) return;
+    this._lastMeterUpdate = now;
+    var peak = this.state.micLevelPeak || 0;
+    var pct = Math.round(Math.min(peak * 100, 100));
+    var dbPeak = this.state.micLevelDbPeak;
+    var muted = this.state.micMuted;
+    var fillEl = document.getElementById('mic-fill-' + this.room.id);
+    var dbEl = document.getElementById('mic-db-' + this.room.id);
+    if (fillEl) { fillEl.style.width = pct + '%'; }
+    if (dbEl) {
+      dbEl.textContent = muted ? '已静音' : (dbPeak > -100 ? dbPeak.toFixed(1) + ' dB' : '--');
+      dbEl.className = 'mic-meter-db' + (muted ? ' muted' : '');
+    }
+  }
+  destroy() {
+    this._stopPoll();
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.ws) { try { this.ws.onclose = null; this.ws.close(); } catch (e) {} this.ws = null; }
+  }
+}
+
+// ═══════════════════════════════════════
+// 渲染引擎
+// ═══════════════════════════════════════
+let roomManager = new RoomManager(), editingId = null;
+
+// ═══════════════════════════════════════
+// 层级管理：地点 → 办公区 → 楼层
+// ═══════════════════════════════════════
+const LOC_KEY = 'obs-locations-v1';
+var _hier = null;
+var _treeFilter = {type:'all', locId:null, locName:null, oaId:null, oaName:null, flId:null, flName:null};
+// collapsed groups: Set of 'loc-{locId}' / 'oa-{oaId}'
+var _treeCollapsed = new Set();
+
+function loadHierarchy() {
+  try { _hier = JSON.parse(localStorage.getItem(LOC_KEY) || '{"locations":[]}'); } catch(e) { _hier = {locations:[]}; }
+  if (!_hier.locations) _hier.locations = [];
+}
+function saveHierarchy() { localStorage.setItem(LOC_KEY, JSON.stringify(_hier)); }
+
+// ═══ 导入导出配置 ═══
+function exportConfig() {
+  var data = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    rooms: roomManager.rooms,
+    hierarchy: _hier
+  };
+  // Electron 模式：使用原生保存对话框
+  if (window.electronAPI && window.electronAPI.exportConfig) {
+    window.electronAPI.exportConfig(JSON.stringify(data, null, 2));
+    return;
+  }
+  // 浏览器模式：Blob 下载
+  var blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'obs-config.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importConfig(event) {
+  // Electron 模式：使用原生打开对话框
+  if (window.electronAPI && window.electronAPI.importConfig) {
+    importConfigElectron();
+    return;
+  }
+  // 浏览器模式：触发文件选择
+  if (!event || !event.target || !event.target.files) {
+    document.getElementById('importFileInput').click();
+    return;
+  }
+  var file = event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) { processImportData(e.target.result); };
+  reader.readAsText(file);
+}
+
+async function importConfigElectron() {
+  try {
+    var result = await window.electronAPI.importConfig();
+    if (result.success) {
+      processImportData(result.content);
+    }
+  } catch (err) {
+    alert('导入失败: ' + err.message);
+  }
+}
+
+function processImportData(jsonStr) {
+  try {
+    var data = JSON.parse(jsonStr);
+    if (!data.rooms || !Array.isArray(data.rooms)) {
+      alert('配置文件格式错误：缺少 rooms 数组');
+      return;
+    }
+    // 合并策略：保留本地已有的房间（同名跳过），新增导入的房间
+    var existingNames = {};
+    roomManager.rooms.forEach(function(r) { existingNames[r.name] = true; });
+    var imported = 0, skipped = 0;
+    data.rooms.forEach(function(r) {
+      if (existingNames[r.name]) { skipped++; return; }
+      // 重置 ID，让 RoomManager 自动分配
+      delete r.id;
+      roomManager.add(r);
+      imported++;
+    });
+    // 导入层级结构（直接覆盖，层级数据通常需要完整迁移）
+    if (data.hierarchy && data.hierarchy.locations) {
+      _hier = data.hierarchy;
+      saveHierarchy();
+    }
+    // 保存房间
+    roomManager.save();
+    alert('导入完成！\n新增房间: ' + imported + ' 间\n跳过(同名): ' + skipped + ' 间\n层级结构已更新。\n页面将刷新以应用更改。');
+    location.reload();
+  } catch (err) {
+    alert('配置文件解析失败: ' + err.message);
+  }
+}
+
+// 从 _hier 收集所有地点/办公区/楼层 名称用于 datalist
+function getAllLocNames() { return (_hier.locations || []).map(l => l.name).filter(Boolean); }
+function getAllOfficeNames() {
+  var o = [];
+  (_hier.locations || []).forEach(function(l) {
+    (l.officeAreas || []).forEach(function(a) { if (a.name) o.push(a.name); });
+  });
+  return o;
+}
+function getAllFloorNames() {
+  var f = [];
+  (_hier.locations || []).forEach(function(l) {
+    (l.officeAreas || []).forEach(function(a) {
+      (a.floors || []).forEach(function(x) { if (x.name) f.push(x.name); });
+    });
+  });
+  return f;
+}
+
+// 验证房间层级是否在已注册层级中
+function validateRoomHierarchy(loc, office, floor) {
+  if (!loc && !office && !floor) return true; // 全部为空，允许
+  var flat = [];
+  (_hier.locations || []).forEach(function(l) {
+    (l.officeAreas || []).forEach(function(a) {
+      (a.floors || []).forEach(function(f) {
+        flat.push({loc: l.name, office: a.name, floor: f.name});
+      });
+    });
+  });
+  return flat.some(function(x) { return x.loc === loc && x.office === office && x.floor === floor; });
+}
+
+// ═══ 侧边栏树形导航 ═══
+function treeSelect(type, locId, locName, oaId, oaName, flId, flName) {
+  _treeFilter = {type:type, locId:locId||null, locName:locName||null, oaId:oaId||null, oaName:oaName||null, flId:flId||null, flName:flName||null};
+  renderSideTree(); renderAll();
+  // 更新顶部标题
+  var mt = document.getElementById('mainTitle');
+  var ms = document.getElementById('mainSub');
+  if (type === 'all') { mt.textContent = '\uD83C\uDF10 \u5168\u90E8\u76F4\u64AD\u95F4'; ms.textContent = ''; }
+  else if (type === 'loc') { mt.textContent = '\uD83D\uDCCD ' + (locName||''); ms.textContent = ''; }
+  else if (type === 'oa') { mt.textContent = '\uD83C\uDFE2 ' + (oaName||''); ms.textContent = '\uD83D\uDCCD ' + (locName||''); }
+  else if (type === 'floor') { mt.textContent = '\uD83D\uDCCB ' + (flName||''); ms.textContent = '\uD83D\uDCCD ' + (locName||'') + ' \u203A \uD83C\uDFE2 ' + (oaName||''); }
+}
+
+function treeToggleGroup(groupId) {
+  if (_treeCollapsed.has(groupId)) _treeCollapsed.delete(groupId);
+  else _treeCollapsed.add(groupId);
+  renderSideTree();
+}
+
+function navigateToRoom(locName, oaName, flName) {
+  var loc = (_hier.locations || []).find(function(l) { return l.name === locName; });
+  if (!loc) return;
+  var oa = loc && oaName ? (loc.officeAreas || []).find(function(a) { return a.name === oaName; }) : null;
+  var fl = oa && flName ? (oa.floors || []).find(function(f) { return f.name === flName; }) : null;
+  if (fl) {
+    // 自动展开路径
+    _treeCollapsed.delete('loc-' + loc.id);
+    _treeCollapsed.delete('oa-' + (oa?oa.id:''));
+    treeSelect('floor', loc.id, loc.name, oa.id, oa.name, fl.id, fl.name);
+  } else if (oa) {
+    _treeCollapsed.delete('loc-' + loc.id);
+    _treeCollapsed.delete('oa-' + oa.id);
+    treeSelect('oa', loc.id, loc.name, oa.id, oa.name);
+  } else if (loc) {
+    _treeCollapsed.delete('loc-' + loc.id);
+    treeSelect('loc', loc.id, loc.name);
+  }
+}
+
+// ═══ 渲染侧边栏树 ═══
+function renderSideTree() {
+  var el = document.getElementById('sideTree');
+  if (!el) return;
+  var h = '';
+  // 全部直播间
+  var isAll = _treeFilter.type === 'all';
+  h += '<div class="tree-root">';
+  h += '<div class="tr-item' + (isAll ? ' active' : '') + '" onclick="treeSelect(\'all\')"><span class="tr-icon">\uD83C\uDF10</span><span class="tr-name">\u5168\u90E8\u76F4\u64AD\u95F4</span></div>';
+  h += '</div>';
+
+  (_hier.locations || []).forEach(function(loc) {
+    var isLocActive = _treeFilter.type === 'loc' && _treeFilter.locId === loc.id;
+    var isLocPath = _treeFilter.locId === loc.id;
+    var locCollapsed = _treeCollapsed.has('loc-' + loc.id);
+    var hasOA = (loc.officeAreas || []).length > 0;
+    // 统计该地点下的总房间数
+    var locCount = countRoomsInLoc(loc.name);
+
+    h += '<div class="tree-root">';
+    h += '<div class="tr-item' + (isLocActive ? ' active' : '') + '" onclick="treeSelect(\'loc\',\'' + loc.id + '\',\'' + e(loc.name) + '\')"><span class="tr-icon">\uD83D\uDCCD</span><span class="tr-name">' + e(loc.name) + '</span>' + (locCount>0 ? '<span class="tr-count" style="font-size:9px;color:var(--mute);flex-shrink:0">' + locCount + '</span>' : '') + (hasOA ? '<span class="tr-expand' + (locCollapsed ? '' : ' open') + '" onclick="event.stopPropagation();treeToggleGroup(\'loc-' + loc.id + '\')">\u25B6</span>' : '') + '</div>';
+    h += '</div>';
+
+    if (hasOA) {
+      h += '<div class="tree-loc-group' + (locCollapsed ? ' collapsed' : '') + '">';
+      (loc.officeAreas || []).forEach(function(oa) {
+        var isOaActive = _treeFilter.type === 'oa' && _treeFilter.oaId === oa.id;
+        var isOaPath = isLocPath && _treeFilter.oaId === oa.id;
+        var oaCollapsed = _treeCollapsed.has('oa-' + oa.id);
+        var hasFL = (oa.floors || []).length > 0;
+        var oaCount = countRoomsInOA(loc.name, oa.name);
+
+        h += '<div class="tree-loc-node">';
+        h += '<div class="tl-header' + (isOaActive ? ' sel' : '') + '" onclick="treeSelect(\'oa\',\'' + loc.id + '\',\'' + e(loc.name) + '\',\'' + oa.id + '\',\'' + e(oa.name) + '\')"><span class="tl-icon">\uD83C\uDFE2</span><span class="tl-name">' + e(oa.name) + '</span>' + (oaCount>0 ? '<span class="tl-count">' + oaCount + '</span>' : '') + (hasFL ? '<span class="tl-arr' + (oaCollapsed ? '' : ' open') + '" onclick="event.stopPropagation();treeToggleGroup(\'oa-' + oa.id + '\')">\u25B6</span>' : '') + '</div>';
+        h += '</div>';
+
+        if (hasFL) {
+          h += '<div class="tree-oa-group' + (oaCollapsed ? ' collapsed' : '') + '">';
+          (oa.floors || []).forEach(function(fl) {
+            var isFlActive = _treeFilter.type === 'floor' && _treeFilter.flId === fl.id;
+            var flCount = countRoomsInFloor(loc.name, oa.name, fl.name);
+            h += '<div class="tree-oa-node">';
+            h += '<div class="to-header' + (isFlActive ? ' sel' : '') + '" onclick="treeSelect(\'floor\',\'' + loc.id + '\',\'' + e(loc.name) + '\',\'' + oa.id + '\',\'' + e(oa.name) + '\',\'' + fl.id + '\',\'' + e(fl.name) + '\')"><span class="to-icon">\uD83D\uDCCB</span><span class="to-name">' + e(fl.name) + '</span>' + (flCount>0 ? '<span class="tl-count">' + flCount + '</span>' : '') + '</div>';
+            h += '</div>';
+          });
+          h += '</div>';
+        }
+      });
+      h += '</div>';
+    }
+  });
+  el.innerHTML = h;
+}
+
+// 统计房间数量
+function countRoomsInLoc(locName) {
+  return roomManager.rooms.filter(function(r) { return r.location === locName; }).length;
+}
+function countRoomsInOA(locName, oaName) {
+  return roomManager.rooms.filter(function(r) { return r.location === locName && r.officeArea === oaName; }).length;
+}
+function countRoomsInFloor(locName, oaName, flName) {
+  return roomManager.rooms.filter(function(r) { return r.location === locName && r.officeArea === oaName && r.floor === flName; }).length;
+}
+
+// 检查房间是否匹配当前筛选
+function matchesFilter(room) {
+  if (_treeFilter.type === 'all') return true;
+  if (_treeFilter.type === 'loc') return room.location === _treeFilter.locName;
+  if (_treeFilter.type === 'oa') return room.location === _treeFilter.locName && room.officeArea === _treeFilter.oaName;
+  if (_treeFilter.type === 'floor') return room.location === _treeFilter.locName && room.officeArea === _treeFilter.oaName && room.floor === _treeFilter.flName;
+  return true;
+}
+
+// ═══ 地点管理弹窗 ═══
+function showLocManager() {
+  renderLocTree();
+  document.getElementById('locModalOverlay').style.display = '';
+}
+function hideLocModal() { document.getElementById('locModalOverlay').style.display = 'none'; renderSideTree(); }
+
+function addLocation() {
+  var inp = document.getElementById('newLocName');
+  var name = inp.value.trim();
+  if (!name) return;
+  if (_hier.locations.some(function(l) { return l.name === name; })) { alert('地点已存在'); return; }
+  var id = 'loc-' + Date.now();
+  _hier.locations.push({id: id, name: name, officeAreas: []});
+  saveHierarchy(); inp.value = ''; renderLocTree(); renderSideTree();
+}
+
+function addOfficeArea(locId) {
+  var inp = document.getElementById('inp-oa-' + locId);
+  if (!inp) return;
+  var name = inp.value.trim();
+  if (!name) return;
+  var loc = _hier.locations.find(function(l) { return l.id === locId; });
+  if (!loc) return;
+  if ((loc.officeAreas || []).some(function(a) { return a.name === name; })) { alert('办公区已存在'); return; }
+  if (!loc.officeAreas) loc.officeAreas = [];
+  loc.officeAreas.push({id: 'oa-' + Date.now(), name: name, floors: []});
+  saveHierarchy(); inp.value = ''; renderLocTree(); renderSideTree();
+}
+
+function addFloor(locId, oaId) {
+  var inp = document.getElementById('inp-fl-' + oaId);
+  if (!inp) return;
+  var name = inp.value.trim();
+  if (!name) return;
+  var loc = _hier.locations.find(function(l) { return l.id === locId; });
+  if (!loc) return;
+  var oa = (loc.officeAreas || []).find(function(a) { return a.id === oaId; });
+  if (!oa) return;
+  if (!oa.floors) oa.floors = [];
+  if (oa.floors.some(function(f) { return f.name === name; })) { alert('楼层已存在'); return; }
+  oa.floors.push({id: 'fl-' + Date.now(), name: name});
+  saveHierarchy(); inp.value = ''; renderLocTree(); renderSideTree();
+}
+
+function addOnEnter(ev, fn, arg1, arg2) {
+  if (ev.key === 'Enter') { if (arg2 !== undefined) fn(arg1, arg2); else fn(arg1); }
+}
+
+function deleteLocNode(type, locId, oaId, flId) {
+  if (!confirm('确定删除？')) return;
+  if (type === 'location') {
+    _hier.locations = _hier.locations.filter(function(l) { return l.id !== locId; });
+    if (_treeFilter.locId === locId) treeSelect('all');
+  } else if (type === 'office') {
+    var loc = _hier.locations.find(function(l) { return l.id === locId; });
+    if (loc) loc.officeAreas = (loc.officeAreas || []).filter(function(a) { return a.id !== oaId; });
+    if (_treeFilter.oaId === oaId) { treeSelect('loc', locId, _treeFilter.locName); }
+  } else if (type === 'floor') {
+    var loc2 = _hier.locations.find(function(l) { return l.id === locId; });
+    if (loc2) {
+      var oa2 = (loc2.officeAreas || []).find(function(a) { return a.id === oaId; });
+      if (oa2) oa2.floors = (oa2.floors || []).filter(function(f) { return f.id !== flId; });
+    }
+    if (_treeFilter.flId === flId) { treeSelect('oa', locId, _treeFilter.locName, oaId, _treeFilter.oaName); }
+  }
+  saveHierarchy(); renderLocTree(); renderSideTree();
+}
+
+function renderLocTree() {
+  var el = document.getElementById('locTree');
+  if (!el) return;
+  var h = '';
+  (_hier.locations || []).forEach(function(loc) {
+    h += '<div class="tree-loc">';
+    h += '<div class="loc-header"><span class="loc-icon">\uD83D\uDCCD</span><span class="loc-name">' + e(loc.name) + '</span><button class="loc-act del" onclick="deleteLocNode(\'location\',\'' + loc.id + '\')">\u2715 \u5220\u9664</button></div>';
+    h += '<div class="loc-children">';
+    (loc.officeAreas || []).forEach(function(oa) {
+      h += '<div class="tree-oa">';
+      h += '<div class="oa-header"><span class="oa-icon">\uD83C\uDFE2</span><span class="oa-name">' + e(oa.name) + '</span><button class="oa-act del" onclick="deleteLocNode(\'office\',\'' + loc.id + '\',\'' + oa.id + '\')">\u2715 \u5220\u9664</button></div>';
+      h += '<div class="oa-children">';
+      (oa.floors || []).forEach(function(fl) {
+        h += '<div class="tree-fl"><div class="fl-row"><span class="fl-icon">\uD83D\uDCCB</span><span class="fl-name">' + e(fl.name) + '</span><button class="fl-act del" onclick="deleteLocNode(\'floor\',\'' + loc.id + '\',\'' + oa.id + '\',\'' + fl.id + '\')">\u2715 \u5220\u9664</button></div></div>';
+      });
+      h += '<div class="add-row"><input type="text" id="inp-fl-' + oa.id + '" placeholder="\u6DFB\u52A0\u697C\u5C42\uFF08\u5982\uFF1A3F\uFF09" onkeydown="addOnEnter(event, addFloor, \'' + loc.id + '\', \'' + oa.id + '\')"><button onclick="addFloor(\'' + loc.id + '\',\'' + oa.id + '\')">\u2713</button></div>';
+      h += '</div></div>';
+    });
+    h += '<div class="add-row"><input type="text" id="inp-oa-' + loc.id + '" placeholder="\u6DFB\u52A0\u529E\u516C\u533A\uFF08\u5982\uFF1A\u671B\u4EACSOHO\uFF09" onkeydown="addOnEnter(event, addOfficeArea, \'' + loc.id + '\')"><button onclick="addOfficeArea(\'' + loc.id + '\')">\u2713</button></div>';
+    h += '</div></div>';
+  });
+  if (!(_hier.locations || []).length) h = '<p style="color:var(--dim);font-size:13px;text-align:center;padding:20px 0">\u6682\u65E0\u5C42\u7EA7\uFF0C\u8BF7\u5728\u4E0B\u65B9\u7684\u8F93\u5165\u6846\u6DFB\u52A0\u5730\u70B9</p>';
+  el.innerHTML = h;
+}
+
+// 初始化
+loadHierarchy();
+const videoPlayers = new Map();
+
+function renderAll() {
+  const grid = document.getElementById('roomGrid');
+  grid.querySelectorAll('.card').forEach(c => c.remove());
+  const es = document.getElementById('emptyState');
+  if (roomManager.rooms.length === 0) { es.style.display = ''; return; }
+  es.style.display = 'none';
+  var filtered = roomManager.rooms.filter(function(r) { return matchesFilter(r); });
+  for (const room of filtered) { grid.appendChild(createCard(room, roomManager.getState(room.id))); }
+  if (filtered.length === 0 && roomManager.rooms.length > 0) {
+    es.style.display = ''; es.innerHTML = '<div class="icon">🔍</div><h3>当前筛选下无房间</h3><p>点击左侧导航切换，或点击「全部直播间」查看大盘</p>';
+  } else if (filtered.length > 0) {
+    es.style.display = 'none';
+  }
+}
+
+// ★ 更新卡片但不摧毁 video 元素 — OBS 高频回调专用
+function updateAllCards() {
+  const grid = document.getElementById('roomGrid');
+  const es = document.getElementById('emptyState');
+  var filtered = roomManager.rooms.filter(function(r) { return matchesFilter(r); });
+  if (filtered.length === 0) {
+    grid.querySelectorAll('.card').forEach(c => c.remove());
+    if (roomManager.rooms.length === 0) { es.style.display = ''; es.innerHTML = '<div class="icon">📡</div><h3>还没有监控房间</h3><p>被监控电脑上开启 OBS WebSocket 后，<br>在大盘填写 IP、端口、密码即可实时监控。</p><button class="btn-add-main" style="margin:10px auto" onclick="showAddModal()">+ 添加第一个房间</button></div>'; }
+    else { es.style.display = ''; es.innerHTML = '<div class="icon">🔍</div><h3>当前筛选下无房间</h3><p>尝试切换地点/办公区/楼层筛选</p>'; }
+    return;
+  }
+  es.style.display = 'none';
+
+  var existing = {}; grid.querySelectorAll('.card').forEach(function(c) {
+    existing[c.id.replace('card-', '')] = c;
+  });
+
+  var filteredIds = {};
+  for (var i = 0; i < filtered.length; i++) { filteredIds[filtered[i].id] = true; }
+  // 移除不在筛选范围内的旧卡片
+  grid.querySelectorAll('.card').forEach(function(c) {
+    var cid = c.id.replace('card-', '');
+    if (!filteredIds[cid]) c.remove();
+  });
+
+  for (var i = 0; i < filtered.length; i++) {
+    var room = filtered[i];
+    var st = roomManager.getState(room.id);
+    if (!st._room) st._room = room;
+    var oldCard = existing[room.id];
+    var videoEl = document.getElementById('v-' + room.id);
+    var isPlaying = videoEl && videoEl._flv && !videoEl.paused;
+
+    if (isPlaying) {
+      if (oldCard) {
+        updateCardVisuals(oldCard, room, st);
+      } else {
+        grid.appendChild(createCard(room, st));
+      }
+    } else {
+      if (oldCard) oldCard.remove();
+      grid.appendChild(createCard(room, st));
+    }
+  }
+}
+
+function updateCardVisuals(card, room, st) {
+  var dot = card.querySelector('.sdot');
+  if (dot) {
+    var dc = 'var(--mute)';
+    if (st.status === 'connected') dc = st.streaming ? '#e74c3c' : 'var(--green)';
+    else if (st.status === 'connecting') dc = 'var(--yellow)';
+    else if (st.status === 'reconnecting') dc = 'var(--orange)';
+    dot.style.background = dc;
+  }
+  if (st.alerts && st.alerts.length > 0) card.classList.add('alert'); else card.classList.remove('alert');
+  if (st.status === 'offline') card.classList.add('offline'); else card.classList.remove('offline');
+
+  var badges = card.querySelector('.status-badges');
+  if (badges) {
+    var bhtml = '';
+    bhtml += (st.status === 'connected' && st.streaming) ? '<span class="stream-badge live">&bull; LIVE</span>' : '<span class="stream-badge off">&bull; 未推流</span>';
+    bhtml += st.recording ? '<span class="stream-badge rec">&bull; REC</span>' : '';
+    bhtml += st.virtualCam ? '<span class="stream-badge vcam">&bull; 虚拟摄像</span>' : '';
+    badges.innerHTML = bhtml;
+  }
+
+  var hasPull = !!(st.pullUrl && st.pullUrl !== '--');
+  var hint = card.querySelector('.play-hint');
+  if (hint) hint.textContent = hasPull ? '点击播放拉流画面' : '未检测到拉流地址';
+  var noUrl = card.querySelector('.no-url');
+  if (noUrl) noUrl.style.display = hasPull ? 'none' : '';
+
+  // 从 ghost card 提取最新 params-section 和 url-row（不动 video 元素）
+  var ghost = createCard(room, st);
+  var np = ghost.querySelector('.params-section');
+  var nu = ghost.querySelector('.url-row');
+  var op = card.querySelector('.params-section');
+  var ou = card.querySelector('.url-row');
+  if (op && np) op.innerHTML = np.innerHTML;
+  if (ou && nu) { ou.className = nu.className; ou.innerHTML = nu.innerHTML; }
+
+  // 更新 footer 时长
+  var ft = card.querySelectorAll('.card-footer .ft');
+  for (var fi = 0; fi < ft.length; fi++) ft[fi].remove();
+  var cff = card.querySelector('.card-footer');
+  if (cff) {
+    if (st.streaming && st.streamTime > 0) {
+      var sspan = document.createElement('span'); sspan.className = 'ft'; sspan.textContent = '推流 ' + fmtDur(st.streamTime); cff.appendChild(sspan);
+    }
+    if (st.recording && st.recordingTime > 0) {
+      var rspan = document.createElement('span'); rspan.className = 'ft'; rspan.textContent = '录制 ' + fmtDur(st.recordingTime); cff.appendChild(rspan);
+    }
+  }
+}
+
+function createCard(room, st) {
+  // Ensure st has _room reference
+  if (!st._room) st._room = room;
+
+  const card = document.createElement('div'); card.className = 'card'; card.id = 'card-' + room.id;
+  if (st.alerts && st.alerts.length > 0) card.classList.add('alert');
+  if (st.status === 'offline') card.classList.add('offline');
+
+  let dc = 'var(--mute)';
+  if (st.status === 'connected') dc = st.streaming ? '#e74c3c' : 'var(--green)';
+  else if (st.status === 'connecting') dc = 'var(--yellow)';
+  else if (st.status === 'reconnecting') dc = 'var(--orange)';
+
+  const sl = { 'connected': st.streaming ? '推流中' : '在线', 'connecting': '连接中...', 'reconnecting': '重连中...', 'offline': '离线' }[st.status] || '离线';
+
+  // 编码器类型判断（用于 UI 标签适配 + 模板选择）
+  const encFam = encoderFamily(st.videoEncoder);
+  const encTmpl = ENCODER_PARAMS[encFam] || ENCODER_PARAMS['unknown'];
+
+  // 编码器参数模板渲染
+  function _encParams() {
+    var html = '';
+    for (var i = 0; i < encTmpl.length; i++) {
+      var p = encTmpl[i];
+      var v = st[p.key] || '--';
+      html += _mi(p.label, v);
+    }
+    return html;
+  }
+
+  // 拉流地址来源标记
+  const isPullManual = st.pullSource === 'manual';
+  const hasPull = !!(st.pullUrl && st.pullUrl !== '--');
+  const pullClass = hasPull ? (isPullManual ? 'manual' : 'auto') : '';
+
+  // 网络质量样式
+  let nqClass = '';
+  if (st.networkQuality === '优秀') nqClass = 'ok';
+  else if (st.networkQuality === '良好') nqClass = 'ok';
+  else if (st.networkQuality === '一般') nqClass = 'warn';
+  else if (st.networkQuality === '差') nqClass = 'bad';
+
+  card.innerHTML =
+    '<div class="card-header">' +
+      '<div class="left"><span class="sdot" style="background:' + dc + '"></span><span class="rname" title="' + e(room.name) + '">' + e(room.name) + '</span><span class="plt">' + e(room.platform) + '</span>' +
+      (room.location ? '<span class="location-tag" title="\u70B9\u51FB\u5BFC\u822A\u5230 ' + e(room.location) + ' \u203A ' + e(room.officeArea || '') + ' \u203A ' + e(room.floor || '') + '" onclick="event.stopPropagation();navigateToRoom(' + JSON.stringify(room.location) + ',' + JSON.stringify(room.officeArea || '') + ',' + JSON.stringify(room.floor || '') + ')">' + e(room.location) + (room.floor ? ' \u203A ' + e(room.floor) : (room.officeArea ? ' \u203A ' + e(room.officeArea) : '')) + '</span>' : '') +
+      '</div>' +
+      '<div class="acts"><button onclick="showEditModal(' + room.id + ')" title="编辑">✎</button><button onclick="reconnectRoom(' + room.id + ')" title="重连">↻</button></div>' +
+    '</div>' +
+    '<div class="video-area" id="va-' + room.id + '" onclick="togglePlay(' + room.id + ')">' +
+      '<video id="v-' + room.id + '" style="display:none" muted autoplay playsinline></video>' +
+      '<div class="overlay" id="ov-' + room.id + '">' +
+        '<div class="status-badges">' +
+        (st.status === 'connected' && st.streaming ? '<span class="stream-badge live">&bull; LIVE</span>' : '<span class="stream-badge off">&bull; 未推流</span>') +
+        (st.recording ? '<span class="stream-badge rec">&bull; REC</span>' : '') +
+        (st.virtualCam ? '<span class="stream-badge vcam">&bull; 虚拟摄像</span>' : '') +
+        '</div>' +
+        '<div class="play-btn" id="pb-' + room.id + '">&#9654;</div>' +
+        '<span class="play-hint" id="ph-' + room.id + '">' + (hasPull ? '点击播放拉流画面' : '未检测到拉流地址') + '</span>' +
+        (!hasPull ? '<span class="no-url">推流后可自动推断拉流地址</span>' : '') +
+      '</div>' +
+    '</div>' +
+    // ── 模块行 ──
+    (function(){
+      var fpsVal = (st.fpsSet ? st.fps + '/' + st.fpsSet : (st.fps || '--'));
+      var fpsCls = st.fpsSet && parseInt(st.fps) < st.fpsSet * 0.7 ? 'warn' : '';
+      var drCls = (st.dropRate && parseFloat(st.dropRate) > 1) ? 'bad' : ((st.dropRate && parseFloat(st.dropRate) > 0.1) ? 'warn' : 'ok');
+      var dfCls = st.droppedFrames > 100 ? 'bad' : (st.droppedFrames > 10 ? 'warn' : 'ok');
+      var rdrCls = (st.renderDropRate && parseFloat(st.renderDropRate) > 1) ? 'bad' : '';
+      var d1 = st.droppedFrames === 0 ? 'ok' : st.droppedFrames > 50 ? 'bad' : 'warn';
+      var d1v = st.droppedFrames > 0 ? st.droppedFrames + '帧' : '正常';
+      var d2 = st.droppedFrames > 100 ? 'bad' : 'ok';
+      var d2v = st.droppedFrames > 100 ? '疑似' : '未检测';
+      var d3 = st.status === 'connected' ? 'ok' : 'warn';
+      var d3v = st.status === 'connected' ? '正常' : '离线';
+      var d4 = st.streaming ? 'ok' : st.status === 'connected' ? 'ok' : 'warn';
+      var d4v = st.streaming ? '正常' : st.status === 'connected' ? '待推流' : '离线';
+      return '<div class="params-section">' +
+        // R1: 视频参数
+        '<div class="module-row"><div class="m-head"><span class="m-icon">📹</span><span class="m-title">视频参数</span></div><div class="m-grid">' +
+          _mi('分辨率', st.resolution) + _mi('帧率', fpsVal, fpsCls) + _mi('视频码率', st.bitrate) + _mi('编码器', st.videoEncoder || '--') +
+          _mi('GOP', st.gop || '--') + _mi('渲染', st.avgRenderTime) + _encParams() +
+        '</div></div>' +
+        // R2: 音频参数
+        '<div class="module-row"><div class="m-head"><span class="m-icon">🎵</span><span class="m-title">音频参数</span></div><div class="m-grid">' +
+          _mi('编码器', st.audioEncoder || '--') + _mi('音频码率', st.audioBitrate || '--') + _mi('采样率', st.audioSampleRate || '48 kHz') +
+          _mi('声道', st.audioChannels || '立体声') + _mi('CPU', st.cpu) + _mi('内存', st.memory) +
+        '</div></div>' +
+        // R2.5: 混音器电平（下拉选择音源 + OBS 风格电平波动条）
+        (() => {
+          var inputs = st.audioInputs || [];
+          var sel = st.selectedAudioInput || '--';
+          var mpct = Math.round((st.micLevelPeak || 0) * 100);
+          var mdb = st.micMuted ? '已静音' : ((st.micLevelDbPeak !== undefined && st.micLevelDbPeak > -100) ? st.micLevelDbPeak.toFixed(1) + ' dB' : (st.micVolumeDb || '--'));
+          var selHtml = inputs.length > 0
+            ? '<select class="mic-select" onchange="roomManager.selectAudioInput(\'' + room.id + '\', this.value)" style="font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 4px;max-width:140px;cursor:pointer">' +
+                inputs.map(function(n){ return '<option value="' + n + '"' + (n === sel ? ' selected' : '') + '>' + n + '</option>'; }).join('') +
+              '</select>'
+            : '<span class="pv" style="font-size:11px">' + (sel || '未检测') + '</span>';
+          return '<div class="module-row"><div class="m-head"><span class="m-icon">🎤</span><span class="m-title">混音器电平</span></div><div class="m-grid">' +
+            '<span class="m-item"><span class="m-label">音源</span>' + selHtml + '</span>' +
+            '<span class="m-item mic-meter-item"><span class="m-label">电平</span>' +
+              '<div class="mic-bar-wrap">' +
+                '<div class="mic-meter">' +
+                  '<div class="mic-meter-bar"><div class="mic-meter-fill" id="mic-fill-' + room.id + '" style="width:' + mpct + '%"></div></div>' +
+                  '<span class="mic-meter-db' + (st.micMuted ? ' muted' : '') + '" id="mic-db-' + room.id + '">' + e(mdb) + '</span>' +
+                '</div>' +
+                '<div class="mic-scale">' +
+                  '<span>-60</span><span>-50</span><span>-40</span><span>-30</span><span>-20</span><span>-10</span><span>-5</span><span class="s0">0</span>' +
+                '</div>' +
+              '</div>' +
+            '</span>' +
+          '</div></div>';
+        })() +
+        // R3: 网络质量
+        '<div class="module-row"><div class="m-head"><span class="m-icon">📶</span><span class="m-title">网络质量</span></div><div class="m-grid">' +
+          _mi('网络质量', st.networkQuality || '--', nqClass) + _mi('网络丢帧率', st.dropRate || '--', drCls) +
+          _mi('丢帧数', st.droppedFrames > 0 ? st.droppedFrames + ' 帧' : '正常', dfCls) +
+          _mi('输出总帧', st.outputTotalFrames > 0 ? st.outputTotalFrames.toLocaleString() : '--') +
+          _mi('渲染丢帧率', st.renderDropRate || '--', rdrCls) + _mi('磁盘剩余', st.disk || '--') +
+        '</div></div>' +
+        // R4: 音视频监控
+        '<div class="module-row detect-row"><div class="m-head"><span class="m-icon">🛡</span><span class="m-title">音视频监控</span></div><div class="m-grid">' +
+          _md('画面丢帧', d1, d1v) + _md('花屏检测', d2, d2v) + _md('声音反向', d3, d3v) + _md('音画同步', d4, d4v) +
+        '</div></div>' +
+      '</div>' +
+      '<div class="url-row">' +
+        '<div class="url-item"><span class="ul">🚀 推流地址</span><span class="uv" id="push-' + room.id + '" title="' + e(st.pushUrl) + '">' + e(st.pushUrl) + '</span><button class="copy-btn" onclick="copyText(\'' + e(st.pushUrl) + '\')">复制</button></div>' +
+        '<div class="url-item"><span class="ul">📡 拉流地址</span><span class="uv ' + pullClass + '" id="pull-' + room.id + '" title="' + e(st.pullUrl) + '">' + e(st.pullUrl || '--') + (isPullManual ? ' [手动]' : (hasPull ? ' [自动]' : '')) + '</span>' + (hasPull ? '<button class="copy-btn" onclick="copyText(\'' + e(st.pullUrl) + '\')">复制</button>' : '') + '</div>' +
+      '</div>';
+    })() +
+    '<div class="card-footer">' +
+      '<span class="fi">' + e(room.host) + ':' + room.port + '</span>' +
+      (st.streaming && st.streamTime > 0 ? '<span class="ft">推流 ' + fmtDur(st.streamTime) + '</span>' : '') +
+      (st.recording && st.recordingTime > 0 ? '<span class="ft">录制 ' + fmtDur(st.recordingTime) + '</span>' : '') +
+    '</div>';
+  return card;
+}
+
+// 模块行参数项（label: value）
+function _mi(label, value, cls) {
+  return '<span class="m-item"><span class="m-label">' + label + '</span><span class="m-value' + (cls ? ' ' + cls : '') + '">' + (value || '--') + '</span></span>';
+}
+// 模块行检测项（带状态圆点）
+function _md(label, cls, val) {
+  return '<span class="m-item"><span class="m-dot ' + cls + '"></span><span class="m-label">' + label + '</span><span class="m-value ' + cls + '">' + val + '</span></span>';
+}
+// 保留旧函数供其他调用
+function _pi(label, value, cls) {
+  return '<div class="param-item"><span class="pl">' + label + '</span><span class="pv' + (cls ? ' ' + cls : '') + '">' + (value || '--') + '</span></div>';
+}
+
+var _toggleDebounce = {};
+function togglePlay(id) {
+  // 500ms 防抖，防止快速点击堆叠
+  var now = Date.now();
+  if (_toggleDebounce[id] && now - _toggleDebounce[id] < 500) return;
+  _toggleDebounce[id] = now;
+
+  const room = roomManager.get(id); if (!room) return;
+  const v = document.getElementById('v-' + id), ov = document.getElementById('ov-' + id), pb = document.getElementById('pb-' + id), ph = document.getElementById('ph-' + id);
+  const st = roomManager.getState(id);
+
+  // 如果已经在播放，则停止并彻底清理
+  const isPlaying = (v._flv || v._hls || (v.src && !v.paused));
+  if (isPlaying) {
+    if (v._flv) {
+      try { v._flv.detachMediaElement(); } catch(e) {}
+      try { v._flv.destroy(); } catch(e) {}
+      v._flv = null;
+    }
+    if (v._hls) {
+      try { v._hls.stopLoad(); } catch(e) {}
+      try { v._hls.destroy(); } catch(e) {}
+      v._hls = null;
+    }
+    if (v._flvHeartbeat) { clearInterval(v._flvHeartbeat); v._flvHeartbeat = null; }
+    v.pause();
+    v.onstalled = null; v.onwaiting = null; v.onplaying = null;
+    v.style.display = 'none'; ov.style.display = '';
+    pb.textContent = '\u25B6'; ph.textContent = '已暂停';
+    return;
+  }
+
+  // 直接取拉流地址：手动填写 > 自动推断的 FLV
+  let url = null;
+  if (room.pullUrl && room.pullUrl.trim()) {
+    url = room.pullUrl.trim();
+  } else if (st.pullUrl && st.pullUrl !== '--') {
+    url = st.pullUrl;
+  } else if (st.pushUrl && st.pushUrl !== '--') {
+    // 实时推断，取第一个 FLV
+    const freshCands = inferPullUrl(st.pushUrl, room.platform);
+    url = freshCands.length > 0 ? freshCands[0] : null;
+  }
+
+  if (!url) {
+    alert('未检测到拉流地址，请确认推流已启动、平台选择正确');
+    return;
+  }
+
+  pb.textContent = '\u22EF';
+  ph.textContent = '正在连接拉流...';
+  startPlayback(v, ov, pb, ph, url);
+}
+
+function startPlayback(v, ov, pb, ph, url) {
+  // 清理旧播放器
+  if (v._flv) { try { v._flv.destroy(); } catch(e) {} v._flv = null; }
+  if (v._hls) { try { v._hls.destroy(); } catch(e) {} v._hls = null; }
+  v.src = '';
+  v.style.display = '';
+  v.muted = true;
+
+  const isFlv = url.endsWith('.flv') || url.includes('inzego.com') || url.includes('zego') || url.includes('.flv?');
+  const isHls = url.endsWith('.m3u8');
+
+  if (isFlv && (window.flvjs && flvjs.isSupported())) {
+    // ═══ flv.js 播放 HTTP-FLV（即构等 RTMP→FLV 场景） ═══
+    playWithFlv(v, ov, pb, ph, url);
+  } else if (isHls && window.Hls && Hls.isSupported()) {
+    // ═══ HLS.js 播放 HLS ═══
+    playWithHls(v, ov, pb, ph, url);
+  } else {
+    // ═══ 直接 src 播放 ═══
+    v.src = url;
+    v.play().then(() => {
+      v.style.display = ''; ov.style.display = 'none';
+      pb.textContent = '\u23F8'; ph.textContent = '正在播放拉流画面';
+    }).catch(e => {
+      console.log('[Play] Error:', e.message);
+      v.src = '';
+      ov.style.display = ''; pb.textContent = '\u25B6';
+      ph.textContent = '播放失败: ' + (e.message || '未知错误');
+    });
+  }
+}
+
+function playWithFlv(v, ov, pb, ph, url) {
+  let player = null, retries = 0;
+  const MAX = 20;
+
+  function create() {
+    // 清理旧播放器但不 detach，保持 video 画面不黑
+    if (player) {
+      try { player.destroy(); } catch(e) {}
+      player = null;
+    }
+    v._flv = null;
+
+    player = flvjs.createPlayer({
+      type: 'flv', url: url, isLive: true,
+      hasAudio: true, hasVideo: true,
+      enableStashBuffer: true,
+      stashInitialSize: 384,
+      autoCleanupSourceBuffer: true,
+      autoCleanupMaxBackwardDuration: 10,
+      autoCleanupMinBackwardDuration: 5
+    }, { enableWorker: false });
+
+    player.attachMediaElement(v);
+    player.load();
+    v._flv = player;
+
+    player.on(flvjs.Events.METADATA_ARRIVED, () => { retries = 0; });
+
+    // ★ 关键修复：LOADING_COMPLETE 时只 load()，不 unload()
+    // unload() 会清零缓冲导致黑屏，load() 直接续流不闪
+    player.on(flvjs.Events.LOADING_COMPLETE, () => {
+      console.warn('[FLV] 流断开');
+      retries++;
+      if (retries > MAX) {
+        if (player) { try { player.destroy(); } catch(e) {} player = null; v._flv = null; }
+        v.style.display = 'none'; ov.style.display = '';
+        pb.textContent = '\u25B6'; ph.textContent = '直播流断开';
+        return;
+      }
+      ph.textContent = '重连 (' + retries + ')';
+      player.load();
+      v.play().catch(() => {});
+    });
+
+    // ERROR → 销毁重建（不 detach，保持 video 不闪）
+    player.on(flvjs.Events.ERROR, (t, info) => {
+      console.warn('[FLV] 错误:', t, info);
+      retries++;
+      if (retries > MAX) {
+        if (player) { try { player.destroy(); } catch(e) {} player = null; v._flv = null; }
+        v.style.display = 'none'; ov.style.display = '';
+        pb.textContent = '\u25B6'; ph.textContent = '播放失败';
+        return;
+      }
+      ph.textContent = '重连 (' + retries + '/' + MAX + ')';
+      setTimeout(() => { if (v._flv) create(); }, 1500);
+    });
+
+    v.play().then(() => {
+      ov.style.display = 'none'; v.style.display = '';
+      pb.textContent = '\u23F8'; ph.textContent = 'FLV 直播中';
+    }).catch(() => {});
+
+    // ★ 心跳检测：currentTime 连续 3 次不变 → 自动重连
+    if (v._flvHeartbeat) clearInterval(v._flvHeartbeat);
+    let lastTime = -1, stallC = 0;
+    v._flvHeartbeat = setInterval(() => {
+      if (!v._flv || v.paused || v.style.display === 'none') return;
+      if (v.currentTime === lastTime) {
+        stallC++;
+        if (stallC >= 3) {
+          console.warn('[FLV] 心跳超时，重连');
+          stallC = 0; lastTime = -1;
+          player.load();
+          v.play().catch(function(){});
+          ph.textContent = 'FLV 直播中 (重连)';
+        }
+      } else { stallC = 0; }
+      lastTime = v.currentTime;
+    }, 4000);
+  }
+
+  create();
+}
+
+function playWithHls(v, ov, pb, ph, url) {
+  let recoverCount = 0;
+  const MAX_RECOVER = 8;
+  let recoveryTimer = null;
+
+  function createHls() {
+    if (v._hls) { try { v._hls.destroy(); } catch(e) {} v._hls = null; }
+    const h = new Hls({
+      liveSyncDurationCount: 6,
+      liveMaxLatencyDurationCount: 12,
+      maxBufferLength: 40,
+      maxMaxBufferLength: 120,
+      startPosition: -1,
+      manifestLoadingMaxRetry: 4,
+      manifestLoadingRetryDelay: 800,
+      levelLoadingMaxRetry: 6,
+      levelLoadingRetryDelay: 800,
+      fragLoadingMaxRetry: 8,
+      fragLoadingRetryDelay: 400,
+      enableWorker: false
+    });
+    v._hls = h;
+
+    h.on(Hls.Events.MANIFEST_PARSED, () => {
+      v.style.display = '';
+      v.muted = true;
+      const p = v.play();
+      if (p) p.then(() => {
+        ov.style.display = 'none';
+        pb.textContent = '\u23F8';
+        ph.textContent = '正在播放拉流画面 (HLS)';
+        recoverCount = 0;
+      }).catch(e => {
+        console.warn('[HLS] autoplay blocked:', e.message);
+        ph.textContent = '点击画面开始播放';
+      });
+    });
+
+    h.on(Hls.Events.FRAG_BUFFERED, () => {
+      if (v.paused && h.media && h.media.readyState >= 2) {
+        v.play().then(() => {
+          ov.style.display = 'none';
+          v.style.display = '';
+          pb.textContent = '\u23F8';
+        }).catch(() => {});
+      }
+    });
+
+    h.on(Hls.Events.ERROR, (event, data) => {
+      console.warn('[HLS] Error:', data.type, data.details, data.fatal ? 'FATAL' : 'non-fatal');
+      if (!data.fatal) {
+        if (data.details === 'bufferStalledError' || data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          v.play().catch(() => {});
+        }
+        return;
+      }
+      recoverCount++;
+      console.error('[HLS] Fatal #' + recoverCount, data.type, data.details);
+      if (recoverCount > MAX_RECOVER) {
+        console.error('[HLS] Giving up after', recoverCount, 'fatal errors');
+        h.destroy(); v._hls = null;
+        v.src = ''; v.style.display = 'none';
+        ov.style.display = ''; pb.textContent = '\u25B6';
+        ph.textContent = 'HLS 持续故障';
+        return;
+      }
+      ph.textContent = '自动重连 (' + recoverCount + '/' + MAX_RECOVER + ')...';
+      const delay = Math.min(500 * recoverCount, 4000);
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      recoveryTimer = setTimeout(() => {
+        console.log('[HLS] Recreating instance...');
+        createHls();
+        h.loadSource(url);
+        h.attachMedia(v);
+        v.style.display = '';
+      }, delay);
+    });
+
+    return h;
+  }
+
+  const hls = createHls();
+  hls.loadSource(url);
+  hls.attachMedia(v);
+}
+
+// 备用播放（已废弃，保留兼容）
+function altPlayback(v, ov, pb, ph) {
+  if (v.src) { try { v.play(); } catch (e) {} return; }
+  ov.style.display = ''; pb.textContent = '\u25B6'; ph.textContent = '播放失败，请手动填写拉流地址';
+}
+
+function updateSummary() {
+  let t = roomManager.rooms.length, o = 0, s = 0, a = 0;
+  for (const r of roomManager.rooms) { const st = roomManager.getState(r.id); if (st.status === 'connected') o++; if (st.streaming) s++; if (st.alerts && st.alerts.length > 0) a++; }
+  document.getElementById('sumTotal').textContent = t;
+  document.getElementById('sumOnline').textContent = o;
+  document.getElementById('sumStreaming').textContent = s;
+  document.getElementById('sumAlerts').textContent = a;
+}
+
+// ═══════════════════════════════════════
+// 房间管理 UI
+// ═══════════════════════════════════════
+function showAddModal() { editingId = null; document.getElementById('modalTitle').textContent = '添加房间'; document.getElementById('btnDelete').style.display = 'none'; cf(); populateDatalists(); document.getElementById('modalOverlay').style.display = ''; }
+function showEditModal(id) {
+  editingId = id; const r = roomManager.get(id); if (!r) return;
+  document.getElementById('modalTitle').textContent = '编辑房间'; document.getElementById('btnDelete').style.display = '';
+  document.getElementById('fldName').value = r.name; document.getElementById('fldHost').value = r.host;
+  document.getElementById('fldPort').value = r.port; document.getElementById('fldPass').value = r.password || '';
+  document.getElementById('fldPlatform').value = r.platform; document.getElementById('fldPullUrl').value = r.pullUrl || '';
+  document.getElementById('fldLocation').value = r.location || ''; document.getElementById('fldOffice').value = r.officeArea || '';
+  document.getElementById('fldFloor').value = r.floor || '';
+  populateDatalists();
+  document.getElementById('modalOverlay').style.display = '';
+}
+function hideModal() { document.getElementById('modalOverlay').style.display = 'none'; editingId = null; }
+function cf() {
+  document.getElementById('fldName').value = ''; document.getElementById('fldHost').value = '';
+  document.getElementById('fldPort').value = '4455'; document.getElementById('fldPass').value = '';
+  document.getElementById('fldPlatform').value = '自有平台'; document.getElementById('fldPullUrl').value = '';
+  document.getElementById('fldLocation').value = ''; document.getElementById('fldOffice').value = ''; document.getElementById('fldFloor').value = '';
+}
+function saveRoom() {
+  const d = {
+    name: document.getElementById('fldName').value.trim(),
+    host: document.getElementById('fldHost').value.trim(),
+    port: parseInt(document.getElementById('fldPort').value) || 4455,
+    password: document.getElementById('fldPass').value,
+    platform: document.getElementById('fldPlatform').value,
+    pullUrl: document.getElementById('fldPullUrl').value.trim(),
+    location: document.getElementById('fldLocation').value.trim() || '',
+    officeArea: document.getElementById('fldOffice').value.trim() || '',
+    floor: document.getElementById('fldFloor').value.trim() || ''
+  };
+  if (!d.name) { alert('请填写房间名称'); return; } if (!d.host) { alert('请填写 OBS WebSocket 地址'); return; }
+  if (editingId) { roomManager.disconnect(editingId); roomManager.update(editingId, d); const r = roomManager.get(editingId); if (r) roomManager.connect(r); }
+  else { const r = roomManager.add(d); roomManager.connect(r); }
+  hideModal(); renderAll(); renderSideTree(); updateSummary();
+}
+function deleteRoom() { if (!editingId) return; if (!confirm('确定删除房间 "' + roomManager.get(editingId)?.name + '" 吗？')) return; roomManager.remove(editingId); hideModal(); renderAll(); renderSideTree(); updateSummary(); }
+function reconnectRoom(id) { roomManager.disconnect(id); const r = roomManager.get(id); if (r) roomManager.connect(r); updateAllCards(); }
+
+// ═══════════════════════════════════════
+// 工具函数
+// ═══════════════════════════════════════
+function e(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function populateDatalists() {
+  var dc = document.getElementById('dlLocation'); if (dc) {
+    dc.innerHTML = '';
+    getAllLocNames().forEach(function(n) { dc.innerHTML += '<option value="' + n + '">' + n + '</option>'; });
+    // 也补充房间中已有的（不在层级中的）
+    roomManager.rooms.forEach(function(r) { if (r.location && getAllLocNames().indexOf(r.location) < 0) dc.innerHTML += '<option value="' + r.location + '">' + r.location + '</option>'; });
+  }
+  var doEl = document.getElementById('dlOffice'); if (doEl) {
+    doEl.innerHTML = '';
+    getAllOfficeNames().forEach(function(n) { doEl.innerHTML += '<option value="' + n + '">' + n + '</option>'; });
+    roomManager.rooms.forEach(function(r) { if (r.officeArea && getAllOfficeNames().indexOf(r.officeArea) < 0) doEl.innerHTML += '<option value="' + r.officeArea + '">' + r.officeArea + '</option>'; });
+  }
+  var df = document.getElementById('dlFloor'); if (df) {
+    df.innerHTML = '';
+    getAllFloorNames().forEach(function(n) { df.innerHTML += '<option value="' + n + '">' + n + '</option>'; });
+    roomManager.rooms.forEach(function(r) { if (r.floor && getAllFloorNames().indexOf(r.floor) < 0) df.innerHTML += '<option value="' + r.floor + '">' + r.floor + '</option>'; });
+  }
+}
+function fmtDur(ms) { const sec = Math.floor(ms / 1000), h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60; if (h > 0) return h + 'h ' + m + 'm'; if (m > 0) return m + 'm ' + s + 's'; return s + 's'; }
+function copyText(t) {
+  if (!t || t === '--') return;
+  navigator.clipboard.writeText(t).then(() => {
+    const btn = event.target; btn.textContent = '已复制'; setTimeout(() => btn.textContent = '复制', 1500);
+  }).catch(() => {});
+}
+
+// ═══════════════════════════════════════
+// 启动
+// ═══════════════════════════════════════
+document.addEventListener('keydown', e => { const m = document.getElementById('modalOverlay'); if (m.style.display === 'none') return; if (e.key === 'Escape') { hideModal(); return; } if (e.key === 'Enter') { saveRoom(); return; } });
+window.addEventListener('beforeunload', () => { for (const [id, c] of roomManager.connections) c.destroy(); });
+setInterval(() => { updateAllCards(); updateSummary(); }, 3000);
+roomManager.connectAll(); renderAll(); renderSideTree(); updateSummary();
+
+// ═══ 日志小部件 ═══
+var _logMsgs = [];
+var _logPersist = []; // 持久记录（内存）
+
+// 拦截所有 console.log/warn/error 写入日志持久存储
+(function() {
+  var _origLog = console.log, _origWarn = console.warn, _origErr = console.error;
+  function _cap(type, args) {
+    var now = new Date().toLocaleTimeString();
+    var msg = '[' + now + '] ' + type + ': ' + Array.prototype.slice.call(args).map(function(a) {
+      try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch(e) { return String(a); }
+    }).join(' ');
+    _logPersist.unshift(msg);
+    if (_logPersist.length > 1000) _logPersist.length = 1000;
+  }
+  console.log = function() { _cap('LOG', arguments); _origLog.apply(console, arguments); };
+  console.warn = function() { _cap('WARN', arguments); _origWarn.apply(console, arguments); };
+  console.error = function() { _cap('ERROR', arguments); _origErr.apply(console, arguments); };
+})();
+
+function _diag(t, msg) {
+  var now = new Date().toLocaleTimeString();
+  var line = '[' + now + '] ' + t + ': ' + msg;
+  _logMsgs.unshift(line);
+  if (_logMsgs.length > 100) _logMsgs.length = 100;
+  _logPersist.unshift(line);
+  if (_logPersist.length > 500) _logPersist.length = 500;
+  var el = document.getElementById('logLines');
+  if (el) el.textContent = _logMsgs.join('\n');
+  console.log('[DIAG]', t, msg);
+}
+
+function toggleLogWidget() {
+  var w = document.getElementById('logWidget');
+  w.classList.toggle('collapsed');
+  var icon = document.getElementById('logToggleIcon');
+  icon.textContent = w.classList.contains('collapsed') ? '\u25B6' : '\u25BC';
+}
+
+function saveLog() {
+  var ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  var filename = 'obs-dashboard-' + ts + '.log';
+  var blob = new Blob([_logPersist.join('\n')], { type: 'text/plain' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  _diag('SAVE', '日志已下载 → ' + filename);
+}
+setTimeout(function() {
+  _diag('INIT', '日志就绪 — 点击左侧边栏底部「💾 下载日志」导出');
+}, 1500);
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# IDE & Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project internal
+.workbuddy/
+.playwright-cli/
+
+# Non-essential project files
+novels/
+*.pptx
+*.py
+*.log
+dashboard.png

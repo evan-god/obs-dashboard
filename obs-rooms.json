@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "name": "room01",
+    "streamer": "主播01",
+    "host": "192.168.1.101",
+    "port": 4455,
+    "password": "",
+    "platform": "自有平台",
+    "pullUrl": "",
+    "flvUrl": ""
+  },
+  {
+    "id": 2,
+    "name": "room02",
+    "streamer": "主播02",
+    "host": "192.168.1.102",
+    "port": 4455,
+    "password": "",
+    "platform": "自有平台",
+    "pullUrl": "",
+    "flvUrl": ""
+  }
+]
