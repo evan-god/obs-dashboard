@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<!-- OBS 远程控制面板 UI 原型 v2 — 完整参数版 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>远程控制面板 v2 — 完整参数</title>
+<style>
+:root {
+  --bg:#0b0f19; --card:#131a2b; --border:#1e2a3d; --borderH:#2a3a55;
+  --text:#e4e9f2; --dim:#8899b4; --mute:#556680; --accent:#4080ff;
+  --accentBg:rgba(64,128,255,.1); --green:#2ecc71; --greenBg:rgba(46,204,113,.1);
+  --yellow:#f0b429; --yellowBg:rgba(240,180,41,.1); --red:#e74c3c;
+  --redBg:rgba(231,76,60,.1); --orange:#e67e22; --radius:8px; --radiusSm:5px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);padding:40px 16px;min-height:100vh}
+
+h1{font-size:18px;text-align:center;margin-bottom:6px}
+.subtitle{font-size:12px;color:var(--dim);text-align:center;margin-bottom:8px}
+.auth-flow{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:32px;font-size:11px;color:var(--dim);flex-wrap:wrap}
+.auth-flow span{background:var(--card);border:1px solid var(--border);padding:6px 14px;border-radius:16px}
+.auth-flow .arrow{color:var(--accent);font-weight:700;background:none;border:none;padding:0;font-size:14px}
+
+/* ═══ ROOM CARD ═══ */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);max-width:480px;margin:0 auto 32px;overflow:hidden}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+.card-header .name{font-weight:700;font-size:14px}
+.card-header .sub{font-size:11px;color:var(--dim)}
+
+/* ═══ CONTROL HEADER ═══ */
+.ctrl-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(255,255,255,.015);border-bottom:1px solid var(--border)}
+.ctrl-title{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+.ctrl-title .dot{width:7px;height:7px;border-radius:50%}
+.ctrl-title .dot.locked{background:var(--yellow)}
+.ctrl-title .dot.unlocked{background:var(--green)}
+.lock-btn{padding:5px 14px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid;transition:.15s}
+.lock-btn.locked{background:var(--yellowBg);color:var(--yellow);border-color:rgba(240,180,41,.3)}
+.lock-btn.locked:hover{background:var(--yellow);color:#000}
+.lock-btn.unlocked{background:var(--greenBg);color:var(--green);border-color:rgba(46,204,113,.3)}
+.lock-btn.unlocked:hover{background:var(--green);color:#000}
+
+/* ═══ CONTROL PANEL ═══ */
+.ctrl-panel{padding:12px 14px;display:none;max-height:70vh;overflow-y:auto}
+.ctrl-panel.show{display:block}
+
+.ctrl-group{border:1px solid var(--border);border-radius:var(--radiusSm);margin-bottom:10px;overflow:hidden}
+.ctrl-group-title{padding:9px 14px;font-size:10px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.5px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between}
+.ctrl-group-title::after{content:'−';font-size:14px;transition:.2s}
+.ctrl-group.collapsed .ctrl-group-title::after{content:'+'}
+.ctrl-group.collapsed .ctrl-group-body{display:none}
+.ctrl-group-body{padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* Buttons */
+.ctrl-btn{padding:7px 16px;border-radius:var(--radiusSm);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);transition:.12s;white-space:nowrap}
+.ctrl-btn:hover{background:var(--borderH)}
+.ctrl-btn:active{transform:scale(.96)}
+.ctrl-btn.pri{background:var(--accentBg);color:var(--accent);border-color:rgba(64,128,255,.3)}
+.ctrl-btn.pri:hover{background:var(--accent);color:#fff}
+.ctrl-btn.dan{background:var(--redBg);color:var(--red);border-color:rgba(231,76,60,.3)}
+.ctrl-btn.dan:hover{background:var(--red);color:#fff}
+.ctrl-btn.war{background:var(--yellowBg);color:var(--yellow);border-color:rgba(240,180,41,.3)}
+.ctrl-btn.war:hover{background:var(--yellow);color:#000}
+.ctrl-btn.grn{background:var(--greenBg);color:var(--green);border-color:rgba(46,204,113,.3)}
+.ctrl-btn.grn:hover{background:var(--green);color:#000}
+
+/* Select / Input */
+.ctrl-sel{min-width:140px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radiusSm);color:var(--text);font-size:12px;cursor:pointer;outline:none;flex:1}
+.ctrl-sel option{background:var(--card);color:var(--text)}
+.ctrl-sel:focus{border-color:var(--accent)}
+.ctrl-inp{width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radiusSm);color:var(--text);font-size:12px;outline:none;text-align:center}
+.ctrl-inp:focus{border-color:var(--accent)}
+
+/* Param row */
+.param-row{display:flex;align-items:center;gap:8px;width:100%}
+.param-row.label{justify-content:flex-start}
+.param-row .lbl{font-size:11px;color:var(--dim);width:80px;text-align:right;flex-shrink:0}
+.param-row .val{font-size:11px;color:var(--text);font-weight:600;width:40px;text-align:right}
+.param-row .flex{flex:1}
+
+/* Vol segment bar */
+.vol-seg{display:flex;gap:2px;flex:1}
+.vol-seg .bar{flex:1;height:6px;border-radius:3px;background:var(--border);transition:.15s}
+.vol-seg .bar.on{background:var(--green)}
+
+/* Password area in settings */
+.settings-section{margin-top:20px}
+.settings-section h3{font-size:13px;margin-bottom:10px;text-align:center}
+
+/* ═══ PASSWORD MODAL ═══ */
+.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:flex;align-items:center;justify-content:center}
+.modal-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:28px 24px;width:340px;text-align:center}
+.modal-box .icon{font-size:32px;margin-bottom:8px}
+.modal-box h3{font-size:16px;margin-bottom:4px}
+.modal-box .sub{font-size:12px;color:var(--dim);margin-bottom:16px}
+.modal-box input{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radiusSm);color:var(--text);font-size:14px;text-align:center;outline:none}
+.modal-box input:focus{border-color:var(--accent)}
+.modal-box .btns{margin-top:16px;display:flex;gap:8px;justify-content:center}
+.modal-box .btns button{padding:8px 28px;border-radius:var(--radiusSm);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.15s}
+.btn-confirm{background:var(--accent);color:#fff}
+.btn-confirm:hover{opacity:.85}
+.btn-cancel{background:var(--border);color:var(--dim)}
+.btn-cancel:hover{color:var(--text)}
+.modal-box .err{font-size:11px;color:var(--red);margin-top:8px;display:none}
+.modal-box .hint{font-size:10px;color:var(--mute);margin-top:10px}
+
+/* ═══ TOAST ═══ */
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:10px 24px;border-radius:20px;font-size:13px;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<h1>🔐 OBS 远程控制面板</h1>
+<div class="subtitle">OBS WebSocket v5 全参数控制 + 主控密码授权</div>
+
+<!-- 授权流程示意 -->
+<div class="auth-flow">
+  <span>👤 主账号 设密码</span>
+  <span class="arrow">→</span>
+  <span>🔑 分享密码给操作员</span>
+  <span class="arrow">→</span>
+  <span>🖥 操作员输入密码解锁</span>
+  <span class="arrow">→</span>
+  <span>⏱ 30分钟无操作自动锁定</span>
+</div>
+
+<!-- ═══════════════ 已解锁的完整控制面板 ═══════════════ -->
+<div class="card" id="demoCard">
+  <div class="card-header">
+    <span class="name">🎮 直播间01 — 游戏区</span>
+    <span class="sub">172.19.191.86:4455</span>
+  </div>
+  <div class="ctrl-bar">
+    <div class="ctrl-title"><span class="dot unlocked"></span>已解锁 — 远程控制</div>
+    <button class="lock-btn unlocked" onclick="lockPanel()">🔓 锁定</button>
+  </div>
+  <div class="ctrl-panel show">
+
+    <!-- 1. 推流 & 录制 -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">📡 推流 & 录制控制</div>
+      <div class="ctrl-group-body">
+        <button class="ctrl-btn pri" onclick="toast('▶ 开始推流')">▶ 开始推流</button>
+        <button class="ctrl-btn dan" onclick="toast('■ 停止推流')">■ 停止推流</button>
+        <button class="ctrl-btn grn" onclick="toast('● 开始录制')">● 开始录制</button>
+        <button class="ctrl-btn war" onclick="toast('⏹ 停止录制')">⏹ 停止录制</button>
+        <button class="ctrl-btn war" onclick="toast('⏸ 暂停录制')">⏸ 暂停录制</button>
+        <button class="ctrl-btn grn" onclick="toast('▶ 继续录制')">▶ 继续录制</button>
+        <button class="ctrl-btn" onclick="toast('📹 回放缓冲区已触发')">📹 触发回放缓冲</button>
+        <button class="ctrl-btn pri" onclick="toast('📷 虚拟摄像机已开启')">📷 虚拟摄像机</button>
+      </div>
+    </div>
+
+    <!-- 2. 场景切换 -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎬 场景切换</div>
+      <div class="ctrl-group-body">
+        <select class="ctrl-sel" onchange="toast('已选择场景：'+this.value)">
+          <option>🎮 游戏画面</option>
+          <option>🖥 桌面捕获</option>
+          <option>💬 聊天界面</option>
+          <option>🎬 BRB 等待</option>
+          <option>🔚 结束画面</option>
+        </select>
+        <button class="ctrl-btn pri" onclick="toast('场景已切换')">切换到此场景</button>
+      </div>
+      <div class="ctrl-group-body" style="border-top:1px solid var(--border);padding-top:8px">
+        <span style="font-size:11px;color:var(--dim);margin-right:4px">转场特效:</span>
+        <select class="ctrl-sel" style="width:130px;min-width:auto">
+          <option>淡入淡出</option>
+          <option>滑入滑出</option>
+          <option>切换</option>
+          <option>渐变</option>
+        </select>
+        <button class="ctrl-btn" onclick="toast('转场特效已应用')">应用</button>
+        <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px;margin-left:6px">
+          <input type="checkbox" checked onchange="toast('Studio 模式 '+(this.checked?'开启':'关闭'))"> Studio 模式
+        </label>
+      </div>
+    </div>
+
+    <!-- 3. 推流参数 -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">📡 推流参数（码率 / 服务器 / 推流码）</div>
+      <div class="ctrl-group-body">
+        <div class="param-row">
+          <span class="lbl">推流服务</span>
+          <select class="ctrl-sel">
+            <option>即构 ZEGO</option>
+            <option>抖音直播</option>
+            <option>B站直播</option>
+            <option>自定义 RTMP</option>
+          </select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">服务器地址</span>
+          <input class="ctrl-inp flex" value="rtmp://publish.zego.com/live" style="text-align-last:left">
+        </div>
+        <div class="param-row">
+          <span class="lbl">推流码</span>
+          <input class="ctrl-inp flex" type="password" value="sk_abc123def456" style="text-align-last:left">
+          <button class="ctrl-btn" onclick="var i=this.previousElementSibling;i.type=i.type==='password'?'text':'password'">👁</button>
+        </div>
+        <div class="param-row">
+          <span class="lbl">视频码率</span>
+          <input class="ctrl-inp" style="width:80px" value="6000">
+          <span style="font-size:11px;color:var(--dim)">Kbps</span>
+          <span class="lbl" style="margin-left:16px">音频码率</span>
+          <input class="ctrl-inp" style="width:80px" value="160">
+          <span style="font-size:11px;color:var(--dim)">Kbps</span>
+        </div>
+        <button class="ctrl-btn pri" onclick="toast('推流参数已更新')">✅ 保存推流参数</button>
+      </div>
+    </div>
+
+    <!-- 4. 视频参数 -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">📐 视频参数（分辨率 / 帧率）</div>
+      <div class="ctrl-group-body">
+        <div class="param-row">
+          <span class="lbl">基础画布</span>
+          <input class="ctrl-inp" style="width:70px" value="1920">
+          <span style="font-size:11px;color:var(--dim)">×</span>
+          <input class="ctrl-inp" style="width:70px" value="1080">
+        </div>
+        <div class="param-row">
+          <span class="lbl">输出分辨率</span>
+          <input class="ctrl-inp" style="width:70px" value="1920">
+          <span style="font-size:11px;color:var(--dim)">×</span>
+          <input class="ctrl-inp" style="width:70px" value="1080">
+        </div>
+        <div class="param-row">
+          <span class="lbl">FPS 帧率</span>
+          <select class="ctrl-sel" style="min-width:auto;width:80px">
+            <option>60</option>
+            <option>30</option>
+            <option>25</option>
+          </select>
+          <span class="lbl" style="margin-left:16px">编码器</span>
+          <select class="ctrl-sel">
+            <option>NVIDIA NVENC H.264</option>
+            <option>x264</option>
+            <option>AMD HW H.264</option>
+          </select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">关键帧间隔</span>
+          <input class="ctrl-inp" style="width:60px" value="2">
+          <span style="font-size:11px;color:var(--dim)">秒</span>
+        </div>
+        <button class="ctrl-btn pri" onclick="toast('视频参数已更新')">✅ 保存视频参数</button>
+      </div>
+    </div>
+
+    <!-- 4.5 高级编码器设置 -->
+    <div class="ctrl-group collapsed">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">⚙ 高级编码器设置（NVIDIA NVENC）</div>
+      <div class="ctrl-group-body">
+        <div class="param-row">
+          <span class="lbl">比特率控制</span>
+          <select class="ctrl-sel">
+            <option>CBR</option>
+            <option>VBR</option>
+            <option>CQP</option>
+            <option>Lossless</option>
+          </select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">预设</span>
+          <select class="ctrl-sel">
+            <option>P1: 最快 (最低质量)</option>
+            <option>P2: 较快</option>
+            <option>P3: 快</option>
+            <option>P4: 中等</option>
+            <option>P5: 慢 (较高质量)</option>
+            <option>P6: 较慢</option>
+            <option>P7: 最慢 (最高质量)</option>
+          </select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">调节</span>
+          <select class="ctrl-sel">
+            <option>高质量</option>
+            <option>低延迟</option>
+            <option>超低延迟</option>
+            <option>无损</option>
+          </select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">多次编码</span>
+          <select class="ctrl-sel">
+            <option>禁用</option>
+            <option>二次编码 (1/4分辨率)</option>
+            <option>二次编码 (全分辨率)</option>
+            <option>三次编码 (1/4分辨率)</option>
+          </select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">配置文件</span>
+          <select class="ctrl-sel">
+            <option>high</option>
+            <option>main</option>
+            <option>baseline</option>
+          </select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">B 帧</span>
+          <input class="ctrl-inp" style="width:60px" value="2">
+        </div>
+        <div class="param-row" style="margin-top:4px">
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px">
+            <input type="checkbox" checked> 前向考虑 (Look-ahead)
+          </label>
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px;margin-left:12px">
+            <input type="checkbox" checked> 自适应量化 (Adaptive Quantization)
+          </label>
+        </div>
+        <div class="param-row">
+          <span class="lbl">自定义选项</span>
+          <input class="ctrl-inp flex" value="" placeholder="如: ref=4 bf=3" style="text-align-last:left">
+        </div>
+        <button class="ctrl-btn pri" onclick="toast('✅ 编码器参数已保存')">✅ 保存编码器参数</button>
+      </div>
+    </div>
+
+    <!-- 5. 混音器 -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎚 混音器（实时音量 & 设备选择）</div>
+
+      <!-- 桌面音频 -->
+      <div class="ctrl-group-body" style="flex-direction:column;gap:4px">
+        <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px">🔊 桌面音频设备</div>
+        <div class="param-row">
+          <select class="ctrl-sel" style="flex:1">
+            <option>扬声器 (Realtek High Definition Audio)</option>
+            <option>耳机 (USB Audio Device)</option>
+            <option>默认</option>
+            <option>禁用</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <div class="param-row" style="flex:1">
+            <div class="vol-seg" style="flex:9"><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>
+            <span style="font-size:10px;color:var(--dim);width:32px;text-align:right">-5 dB</span>
+          </div>
+          <button class="ctrl-btn war" style="padding:4px 10px;font-size:10px" onclick="this.textContent=this.textContent==='🔇'?'🔊':'🔇'">🔇</button>
+          <button class="ctrl-btn" style="padding:4px 8px;font-size:10px" title="选项">⋯</button>
+        </div>
+      </div>
+
+      <!-- 桌面音频 2 -->
+      <div class="ctrl-group-body" style="flex-direction:column;gap:4px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px">🔊 桌面音频设备 2</div>
+        <div class="param-row">
+          <select class="ctrl-sel" style="flex:1">
+            <option>禁用</option>
+            <option>默认</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <div class="param-row" style="flex:1">
+            <div class="vol-seg" style="flex:9"><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div></div>
+            <span style="font-size:10px;color:var(--mute);width:32px;text-align:right">-60 dB</span>
+          </div>
+          <button class="ctrl-btn war" style="padding:4px 10px;font-size:10px">🔇</button>
+          <button class="ctrl-btn" style="padding:4px 8px;font-size:10px" title="选项">⋯</button>
+        </div>
+      </div>
+
+      <!-- 麦克风/Aux -->
+      <div class="ctrl-group-body" style="flex-direction:column;gap:4px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px">🎤 麦克风/辅助音频设备</div>
+        <div class="param-row">
+          <select class="ctrl-sel" style="flex:1">
+            <option>麦克风 (Realtek High Definition Audio)</option>
+            <option>USB 麦克风</option>
+            <option>默认</option>
+            <option>禁用</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <div class="param-row" style="flex:1">
+            <div class="vol-seg" style="flex:9"><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar on"></div><div class="bar"></div><div class="bar"></div></div>
+            <span style="font-size:10px;color:var(--dim);width:32px;text-align:right">-2 dB</span>
+          </div>
+          <button class="ctrl-btn war" style="padding:4px 10px;font-size:10px" onclick="this.textContent=this.textContent==='🔇'?'🎤':'🔇'">🔇</button>
+          <button class="ctrl-btn" style="padding:4px 8px;font-size:10px" title="选项">⋯</button>
+        </div>
+      </div>
+
+      <!-- 麦克风/Aux 2 -->
+      <div class="ctrl-group-body" style="flex-direction:column;gap:4px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px">🎤 麦克风/辅助音频设备 2</div>
+        <div class="param-row">
+          <select class="ctrl-sel" style="flex:1">
+            <option>禁用</option>
+            <option>默认</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <div class="param-row" style="flex:1">
+            <div class="vol-seg" style="flex:9"><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div></div>
+            <span style="font-size:10px;color:var(--mute);width:32px;text-align:right">-60 dB</span>
+          </div>
+          <button class="ctrl-btn war" style="padding:4px 10px;font-size:10px">🔇</button>
+          <button class="ctrl-btn" style="padding:4px 8px;font-size:10px" title="选项">⋯</button>
+        </div>
+      </div>
+
+      <!-- 麦克风/Aux 3 -->
+      <div class="ctrl-group-body" style="flex-direction:column;gap:4px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px">🎤 麦克风/辅助音频设备 3</div>
+        <div class="param-row">
+          <select class="ctrl-sel" style="flex:1">
+            <option>禁用</option>
+            <option>默认</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <div class="param-row" style="flex:1">
+            <div class="vol-seg" style="flex:9"><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div><div class="bar" style="background:var(--border)"></div></div>
+            <span style="font-size:10px;color:var(--mute);width:32px;text-align:right">-60 dB</span>
+          </div>
+          <button class="ctrl-btn war" style="padding:4px 10px;font-size:10px">🔇</button>
+          <button class="ctrl-btn" style="padding:4px 8px;font-size:10px" title="选项">⋯</button>
+        </div>
+      </div>
+
+      <div class="ctrl-group-body" style="border-top:1px solid var(--border);padding-top:8px">
+        <button class="ctrl-btn war">🔇 全部静音</button>
+        <button class="ctrl-btn grn">🔊 全部取消静音</button>
+      </div>
+    </div>
+
+    <!-- 6. 源管理 -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">📦 源管理（添加 / 移除 / 排序）</div>
+
+      <!-- 搜索 & 添加 -->
+      <div class="ctrl-group-body" style="padding-bottom:6px">
+        <select class="ctrl-sel" style="flex:2;min-width:120px">
+          <option>+ 添加源</option>
+          <option>图像</option>
+          <option>媒体源</option>
+          <option>文本 (GDI+)</option>
+          <option>浏览器</option>
+          <option>显示器捕获</option>
+          <option>游戏捕获</option>
+          <option>窗口捕获</option>
+          <option>摄像头(V4L2)</option>
+          <option>视频捕获设备</option>
+          <option>音频输入捕获</option>
+          <option>音频输出捕获</option>
+          <option>全屏应用程序捕获</option>
+          <option>场景 (嵌入式)</option>
+          <option>分组</option>
+          <option>NDI 源</option>
+        </select>
+        <button class="ctrl-btn pri" onclick="toast('✅ 源已添加')">添加</button>
+        <button class="ctrl-btn dan" onclick="toast('已删除选中源')">删除</button>
+      </div>
+
+      <!-- 源列表 -->
+      <div class="ctrl-group-body" style="flex-direction:column;gap:2px;padding-top:4px;border-top:1px solid var(--border)">
+        <div style="font-size:10px;color:var(--mute);margin-bottom:4px">当前场景: 🎮 游戏画面 — 共 6 个源</div>
+
+        <!-- 浏览器源 -->
+        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:4px">
+          <span style="color:var(--mute);font-size:11px;cursor:grab">⠿</span>
+          <span style="flex:1;font-size:12px">🌐 弹幕显示</span>
+          <span style="font-size:10px;color:var(--dim);margin-right:4px">浏览器</span>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px" onclick="toast('已切换弹幕显示 可见性')">👁 可见</button>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px" onclick="toast('已锁定弹幕显示')">🔒</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px" onclick="toast('弹幕显示 已上移')">▲</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px" onclick="toast('弹幕显示 已下移')">▼</button>
+        </div>
+
+        <!-- 文本 -->
+        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:4px">
+          <span style="color:var(--mute);font-size:11px;cursor:grab">⠿</span>
+          <span style="flex:1;font-size:12px">📝 昵称显示</span>
+          <span style="font-size:10px;color:var(--dim);margin-right:4px">文本 (GDI+)</span>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px" onclick="toast('已切换 昵称显示 可见性')">👁 可见</button>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px" onclick="toast('已锁定 昵称显示')">🔒</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▲</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▼</button>
+        </div>
+
+        <!-- 摄像头 -->
+        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--accentBg);border:1px solid var(--accent);border-radius:4px">
+          <span style="color:var(--mute);font-size:11px;cursor:grab">⠿</span>
+          <span style="flex:1;font-size:12px">📷 摄像头</span>
+          <span style="font-size:10px;color:var(--dim);margin-right:4px">视频捕获</span>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px" onclick="toast('已切换 摄像头 可见性')">👁 可见</button>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px">🔒</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▲</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▼</button>
+          <span style="font-size:10px;color:var(--accent);margin-left:auto">● 选中</span>
+        </div>
+
+        <!-- 游戏源 -->
+        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:4px">
+          <span style="color:var(--mute);font-size:11px;cursor:grab">⠿</span>
+          <span style="flex:1;font-size:12px">🎮 游戏画面</span>
+          <span style="font-size:10px;color:var(--dim);margin-right:4px">游戏捕获</span>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px" onclick="toast('已切换 游戏画面 可见性')">👁 可见</button>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px">🔒</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▲</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▼</button>
+        </div>
+
+        <!-- 显示器 -->
+        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:4px">
+          <span style="color:var(--mute);font-size:11px;cursor:grab">⠿</span>
+          <span style="flex:1;font-size:12px">🖥 显示器捕获</span>
+          <span style="font-size:10px;color:var(--dim);margin-right:4px">显示器捕获</span>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px" onclick="toast('已切换 显示器捕获 可见性')">👁 不可见</button>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px">🔒</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▲</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▼</button>
+        </div>
+
+        <!-- 背景图 (底层) -->
+        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:4px">
+          <span style="color:var(--mute);font-size:11px;cursor:grab">⠿</span>
+          <span style="flex:1;font-size:12px">🖼 背景图</span>
+          <span style="font-size:10px;color:var(--dim);margin-right:4px">图像</span>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px" onclick="toast('已切换 背景图 可见性')">👁 可见</button>
+          <button class="ctrl-btn" style="padding:3px 8px;font-size:10px">🔒</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▲</button>
+          <button class="ctrl-btn" style="padding:3px 6px;font-size:10px">▼</button>
+        </div>
+      </div>
+
+      <!-- 源属性编辑（选中后显示） -->
+      <div class="ctrl-group-body" style="border-top:1px solid var(--border);padding-top:6px;flex-direction:column;gap:6px">
+        <div style="font-size:10px;color:var(--mute)">选中: 📷 摄像头</div>
+        <div class="param-row">
+          <span class="lbl">设备</span>
+          <select class="ctrl-sel"><option>USB Camera (1080p)</option><option>Integrated Camera</option></select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">分辨率</span>
+          <select class="ctrl-sel"><option>1920×1080</option><option>1280×720</option><option>640×480</option></select>
+          <span class="lbl" style="margin-left:12px">FPS</span>
+          <select class="ctrl-sel" style="min-width:auto;width:80px"><option>30</option><option>60</option><option>25</option></select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">视频格式</span>
+          <select class="ctrl-sel"><option>MJPG</option><option>YUY2</option><option>NV12</option></select>
+          <span class="lbl" style="margin-left:12px">色彩空间</span>
+          <select class="ctrl-sel" style="min-width:auto;width:100px"><option>sRGB</option><option>709</option></select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">色彩范围</span>
+          <select class="ctrl-sel"><option>部分</option><option>完整</option></select>
+          <span class="lbl" style="margin-left:12px">缓冲</span>
+          <select class="ctrl-sel" style="min-width:auto;width:80px"><option>自动</option><option>启用</option><option>禁用</option></select>
+        </div>
+        <div class="param-row">
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px">
+            <input type="checkbox" checked> 未显示时禁用
+          </label>
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px">
+            <input type="checkbox" checked> 硬件解码
+          </label>
+        </div>
+        <div class="param-row" style="margin-top:4px">
+          <span class="lbl">重缩放</span>
+          <input class="ctrl-inp" style="width:60px" value="1920">
+          <span style="font-size:11px;color:var(--dim)">×</span>
+          <input class="ctrl-inp" style="width:60px" value="1080">
+          <span class="lbl" style="margin-left:12px;width:auto">滤镜</span>
+          <select class="ctrl-sel" style="min-width:auto;width:100px">
+            <option>禁用</option>
+            <option>双线性</option>
+            <option>双立方</option>
+            <option>Lanczos</option>
+          </select>
+        </div>
+        <button class="ctrl-btn pri" onclick="toast('✅ 源属性已保存')">✅ 保存源属性</button>
+      </div>
+    </div>
+
+    <!-- 8. 滤镜管理 -->
+      <div class="ctrl-group-body">
+        <select class="ctrl-sel">
+          <option>🎤 麦克风</option>
+          <option>🖥 游戏画面</option>
+          <option>📷 摄像头</option>
+        </select>
+        <select class="ctrl-sel" style="min-width:auto;width:120px">
+          <option>+ 添加滤镜</option>
+          <option>降噪 (Noise Suppression)</option>
+          <option>增益 (Gain)</option>
+          <option>压缩器 (Compressor)</option>
+          <option>色彩校正</option>
+          <option>绿幕扣像</option>
+        </select>
+        <button class="ctrl-btn pri" onclick="toast('滤镜已添加')">添加</button>
+        <button class="ctrl-btn dan" onclick="toast('滤镜已移除')">移除</button>
+      </div>
+    </div>
+
+    <!-- 9. 音频设置 -->
+    <div class="ctrl-group collapsed">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎧 音频设置（采样率 / 声道 / 全局设备）</div>
+      <div class="ctrl-group-body">
+        <div class="param-row">
+          <span class="lbl">采样率</span>
+          <select class="ctrl-sel">
+            <option>44.1 kHz</option>
+            <option>48 kHz</option>
+          </select>
+          <span class="lbl" style="margin-left:12px">声道</span>
+          <select class="ctrl-sel">
+            <option>立体声</option>
+            <option>单声道</option>
+            <option>2.1</option>
+            <option>4.0</option>
+            <option>4.1</option>
+            <option>5.1</option>
+            <option>7.1</option>
+          </select>
+        </div>
+        <div class="param-row" style="margin-top:8px">
+          <span class="lbl" style="width:100%;text-align:left;margin-bottom:4px;font-weight:600;color:var(--text)">全局音频设备:</span>
+        </div>
+        <div class="param-row"><span class="lbl">桌面音频</span><select class="ctrl-sel"><option>扬声器 (Realtek Audio)</option><option>默认</option><option>禁用</option></select></div>
+        <div class="param-row"><span class="lbl">桌面音频 2</span><select class="ctrl-sel"><option>禁用</option><option>默认</option></select></div>
+        <div class="param-row"><span class="lbl">麦克风/辅助</span><select class="ctrl-sel"><option>麦克风 (Realtek Audio)</option><option>默认</option><option>禁用</option></select></div>
+        <div class="param-row"><span class="lbl">麦克风/辅助 2</span><select class="ctrl-sel"><option>禁用</option><option>默认</option></select></div>
+        <div class="param-row"><span class="lbl">麦克风/辅助 3</span><select class="ctrl-sel"><option>禁用</option><option>默认</option></select></div>
+        <div class="param-row"><span class="lbl">麦克风/辅助 4</span><select class="ctrl-sel"><option>禁用</option><option>默认</option></select></div>
+        <div class="param-row" style="margin-top:8px"><span class="lbl" style="width:100%;text-align:left;margin-bottom:4px;font-weight:600;color:var(--text)">音频计量:</span></div>
+        <div class="param-row"><span class="lbl">峰值类型</span><select class="ctrl-sel"><option>采样峰值</option><option>真峰值</option></select></div>
+        <div class="param-row"><span class="lbl">衰减速率</span><select class="ctrl-sel"><option>快 (20dB/s)</option><option>中等 (10dB/s)</option><option>慢 (5dB/s)</option></select></div>
+        <button class="ctrl-btn pri" onclick="toast('✅ 音频设置已保存')">✅ 保存音频设置</button>
+      </div>
+    </div>
+
+    <!-- 10. 录制参数 -->
+    <div class="ctrl-group collapsed">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">💾 录制参数（路径 / 格式 / 编码器）</div>
+      <div class="ctrl-group-body">
+        <div class="param-row">
+          <span class="lbl">录制目录</span>
+          <input class="ctrl-inp flex" value="D:\OBS Recordings" style="text-align-last:left">
+          <button class="ctrl-btn" onclick="toast('目录已更新')">浏览</button>
+        </div>
+        <div class="param-row">
+          <span class="lbl">文件命名</span>
+          <input class="ctrl-inp flex" value="%CCYY-%MM-%DD %hh-%mm-%ss" style="text-align-last:left">
+        </div>
+        <div class="param-row" style="margin-top:8px">
+          <span class="lbl">视频编码器</span>
+          <select class="ctrl-sel">
+            <option>使用推流编码器</option>
+            <option>NVIDIA NVENC H.264</option>
+            <option>NVIDIA NVENC HEVC</option>
+            <option>x264</option>
+          </select>
+        </div>
+        <div class="param-row">
+          <span class="lbl">音频编码器</span>
+          <select class="ctrl-sel">
+            <option>AAC (默认)</option>
+            <option>FFmpeg AAC</option>
+            <option>Opus</option>
+            <option>PCM</option>
+          </select>
+        </div>
+        <div class="param-row" style="margin-top:8px">
+          <span class="lbl" style="width:100%;text-align:left;margin-bottom:4px;font-weight:600;color:var(--text)">音轨选择:</span>
+        </div>
+        <div class="param-row" style="gap:12px">
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px"><input type="checkbox" checked> 1</label>
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px"><input type="checkbox" checked> 2</label>
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px"><input type="checkbox"> 3</label>
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px"><input type="checkbox"> 4</label>
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px"><input type="checkbox"> 5</label>
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px"><input type="checkbox"> 6</label>
+        </div>
+        <div class="param-row" style="margin-top:8px">
+          <span class="lbl" style="width:100%;text-align:left;margin-bottom:4px;font-weight:600;color:var(--text)">封装格式:</span>
+        </div>
+        <div class="param-row">
+          <span class="lbl">封装类型</span>
+          <select class="ctrl-sel">
+            <option>mkv (推荐)</option>
+            <option>mp4</option>
+            <option>mov</option>
+            <option>flv</option>
+            <option>ts</option>
+          </select>
+          <span class="lbl" style="margin-left:12px">自动混流</span>
+          <select class="ctrl-sel" style="min-width:auto;width:100px">
+            <option>mp4</option>
+            <option>无</option>
+          </select>
+        </div>
+        <div class="param-row" style="margin-top:8px">
+          <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px">
+            <input type="checkbox"> 按时间段自动拆分文件
+          </label>
+          <span class="lbl" style="margin-left:12px">间隔</span>
+          <input class="ctrl-inp" style="width:60px" value="15">
+          <span style="font-size:11px;color:var(--dim)">分钟</span>
+        </div>
+        <button class="ctrl-btn pri" onclick="toast('✅ 录制参数已保存')">✅ 保存录制参数</button>
+      </div>
+    </div>
+
+    <!-- 11. 输出音频轨道 -->
+    <div class="ctrl-group collapsed">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎵 输出音频轨道（1-4）</div>
+      <div class="ctrl-group-body">
+        <div style="font-size:11px;color:var(--mute);margin-bottom:8px">音频比特率设置:</div>
+        <div class="param-row">
+          <span class="lbl">轨道 1</span>
+          <input class="ctrl-inp" style="width:70px" value="160">
+          <span style="font-size:11px;color:var(--dim)">Kbps</span>
+          <span class="lbl" style="margin-left:12px;width:60px">名称</span>
+          <input class="ctrl-inp flex" value="混合音频" style="text-align-last:left">
+        </div>
+        <div class="param-row">
+          <span class="lbl">轨道 2</span>
+          <input class="ctrl-inp" style="width:70px" value="160">
+          <span style="font-size:11px;color:var(--dim)">Kbps</span>
+          <span class="lbl" style="margin-left:12px;width:60px">名称</span>
+          <input class="ctrl-inp flex" value="游戏音+麦克风" style="text-align-last:left">
+        </div>
+        <div class="param-row">
+          <span class="lbl">轨道 3</span>
+          <input class="ctrl-inp" style="width:70px" value="320">
+          <span style="font-size:11px;color:var(--dim)">Kbps</span>
+          <span class="lbl" style="margin-left:12px;width:60px">名称</span>
+          <input class="ctrl-inp flex" value="仅麦克风" style="text-align-last:left">
+        </div>
+        <div class="param-row">
+          <span class="lbl">轨道 4</span>
+          <input class="ctrl-inp" style="width:70px" value="128">
+          <span style="font-size:11px;color:var(--dim)">Kbps</span>
+          <span class="lbl" style="margin-left:12px;width:60px">名称</span>
+          <input class="ctrl-inp flex" value="备用" style="text-align-last:left">
+        </div>
+        <button class="ctrl-btn pri" onclick="toast('✅ 音频轨道参数已保存')">✅ 保存音频轨道</button>
+      </div>
+    </div>
+
+    <!-- 12. 快捷操作 -->
+    <div class="ctrl-group">
+      <div class="ctrl-group-title" onclick="this.parentElement.classList.toggle('collapsed')">⚡ 快捷操作</div>
+      <div class="ctrl-group-body">
+        <button class="ctrl-btn" onclick="toast('已切换到 全屏 场景')">🎮 切游戏场景</button>
+        <button class="ctrl-btn" onclick="toast('已切换到 BRB')">⏳ 切 BRB</button>
+        <button class="ctrl-btn" onclick="toast('已切换到 结束画面')">🔚 切结束画面</button>
+        <button class="ctrl-btn" onclick="toast('截图已保存')">📸 快速截图</button>
+        <button class="ctrl-btn war" onclick="toast('紧急：停止推流 + 切换 BRB')">🆘 紧急刹车</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════ 主控密码设置 ═══════════════ -->
+<div class="card">
+  <div class="card-header">
+    <span class="name">⚙ 主控密码设置（仅主账号可见）</span>
+  </div>
+  <div style="padding:16px">
+    <div style="font-size:12px;color:var(--dim);margin-bottom:12px;line-height:1.6">
+      设置一个全局主控密码，分享给需要远程控制的操作员。<br>
+      修改密码后，旧密码立即失效，所有人需重新输入新密码。
+    </div>
+    <div class="param-row">
+      <span class="lbl">主控密码</span>
+      <input class="ctrl-inp flex" type="password" value="123456" id="masterPw" style="text-align-last:left">
+      <button class="ctrl-btn" onclick="var i=document.getElementById('masterPw');i.type=i.type==='password'?'text':'password'">👁</button>
+    </div>
+    <div class="param-row" style="margin-top:8px">
+      <span class="lbl">自动锁定</span>
+      <select class="ctrl-sel" style="min-width:auto;width:100px">
+        <option>30 分钟</option>
+        <option>15 分钟</option>
+        <option>60 分钟</option>
+        <option>永不</option>
+      </select>
+      <span style="font-size:11px;color:var(--mute)">无操作后自动收回控制权限</span>
+    </div>
+    <div style="margin-top:12px">
+      <button class="ctrl-btn pri" onclick="toast('✅ 主控密码已保存')">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 密码弹窗 ═══════════════ -->
+<div class="modal-mask" id="pwModal" style="display:none">
+  <div class="modal-box">
+    <div class="icon">🔐</div>
+    <h3>输入主控密码</h3>
+    <div class="sub">172.19.191.86 — 直播间01</div>
+    <input type="password" id="pwInput" placeholder="请输入主控密码" onkeydown="if(event.key==='Enter')confirmUnlock()">
+    <div class="err" id="pwErr">密码错误，请重试</div>
+    <div class="btns">
+      <button class="btn-cancel" onclick="hidePwModal()">取消</button>
+      <button class="btn-confirm" onclick="confirmUnlock()">解锁</button>
+    </div>
+    <div class="hint">密码由主账号设置，如忘记请联系管理员</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+function showUnlock() { document.getElementById('pwModal').style.display='';document.getElementById('pwInput').value='';document.getElementById('pwErr').style.display='none';document.getElementById('pwInput').focus(); }
+function hidePwModal() { document.getElementById('pwModal').style.display='none'; }
+function confirmUnlock() {
+  var v = document.getElementById('pwInput').value;
+  if (v === document.getElementById('masterPw').value) {
+    hidePwModal();
+    var bar = document.querySelector('.ctrl-title .dot');
+    bar.className = 'dot unlocked';
+    var btn = document.querySelector('.lock-btn');
+    btn.className = 'lock-btn unlocked'; btn.textContent = '🔓 锁定'; btn.onclick = lockPanel;
+    document.querySelector('.ctrl-panel').classList.add('show');
+    document.querySelector('.ctrl-title').childNodes[1].textContent = '已解锁 — 远程控制';
+    toast('✅ 已解锁远程控制');
+  } else {
+    document.getElementById('pwErr').style.display='';
+  }
+}
+function lockPanel() {
+  var bar = document.querySelector('.ctrl-title .dot');
+  bar.className = 'dot locked';
+  var btn = document.querySelector('.lock-btn');
+  btn.className = 'lock-btn locked'; btn.textContent = '🔒 点击解锁'; btn.onclick = showUnlock;
+  document.querySelector('.ctrl-panel').classList.remove('show');
+  document.querySelector('.ctrl-title').childNodes[1].textContent = '已锁定 — 只读模式';
+  toast('🔒 远程控制已锁定');
+}
+var _tid;
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(_tid);
+  _tid = setTimeout(function(){ t.classList.remove('show'); }, 1800);
+}
+
+// Toggle all group collapse on title click handled by inline onclick
+</script>
+</body>
+</html>

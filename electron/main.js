@@ -74,6 +74,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.url === '/obs-rooms.json') {
+    const roomsJSON = fs.readFileSync(path.join(HERE, 'obs-rooms.json'), 'utf-8');
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(roomsJSON);
+    return;
+  }
+
   if (req.url === '/health') {
     const ok = !!(profileDir && fs.existsSync(profileDir));
     res.writeHead(200, { 'Content-Type': 'text/plain' });

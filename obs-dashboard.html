@@ -171,6 +171,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .video-area .stream-badge.vcam{background:#8e44ad;color:#fff}
 @keyframes pulse2{0%,100%{opacity:1}50%{opacity:.6}}
 
+/* ═══ VIDEO VOLUME BAR ═══ */
+.video-volbar{position:absolute;bottom:0;left:0;right:0;height:32px;background:rgba(0,0,0,.65);display:flex;align-items:center;padding:0 8px;gap:8px;z-index:3;opacity:0;pointer-events:none;transition:opacity .15s}
+.video-volbar.show{opacity:1;pointer-events:auto}
+.video-volbar .vol-btn{background:none;border:none;color:#fff;cursor:pointer;font-size:16px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;transition:.12s;border-radius:3px}
+.video-volbar .vol-btn:hover{background:rgba(255,255,255,.15)}
+.video-volbar .vol-slider{-webkit-appearance:none;appearance:none;width:100px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;outline:none;cursor:pointer;flex-shrink:0}
+.video-volbar .vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#fff;cursor:pointer}
+.video-volbar .vol-slider::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff;border:none;cursor:pointer}
+
 /* ═══ MODULE ROWS (左侧模块名 + 右侧网格对齐) ═══ */
 .params-section{padding:10px 16px;display:flex;flex-direction:column;gap:5px}
 .module-row{display:grid;grid-template-columns:54px 1fr;align-items:start;gap:6px;padding:6px 10px;background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.04);border-radius:5px}
@@ -254,6 +263,71 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .log-widget .log-controls button{background:var(--border);border:none;color:var(--dim);cursor:pointer;font-size:11px;padding:4px 12px;border-radius:4px;white-space:nowrap;transition:.15s;width:100%}
 .log-widget .log-controls button:hover{background:var(--accent);color:#fff}
 .log-widget .log-lines{overflow-y:auto;max-height:100px;font-family:Consolas,monospace;font-size:10px;color:var(--dim);line-height:1.4;white-space:pre-wrap;word-break:break-all}
+
+/* ═══ REMOTE CONTROL VIEW ═══ */
+.remote-view{flex:1;display:none;flex-direction:column;overflow-y:auto}
+.remote-view.show{display:flex}
+.remote-hd{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);background:rgba(13,17,29,.6);flex-shrink:0}
+.remote-hd .back-btn{background:none;border:1px solid var(--border);color:var(--dim);cursor:pointer;font-size:12px;padding:4px 12px;border-radius:16px;transition:.15s}
+.remote-hd .back-btn:hover{color:var(--text);border-color:var(--borderH)}
+.remote-hd .rm-title{font-weight:700;font-size:13px;color:var(--text);flex:1}
+.remote-hd .rm-sub{font-size:11px;color:var(--dim)}
+.remote-hd .lock-status{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600}
+.remote-hd .lock-status .dot{width:7px;height:7px;border-radius:50%}
+.remote-hd .lock-status .dot.locked{background:var(--yellow)}
+.remote-hd .lock-status .dot.unlocked{background:var(--green)}
+.remote-hd .lock-btn-rm{padding:4px 14px;border-radius:14px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid;transition:.15s;white-space:nowrap}
+.remote-hd .lock-btn-rm.locked{background:var(--yellowBg);color:var(--yellow);border-color:rgba(240,180,41,.25)}
+.remote-hd .lock-btn-rm.locked:hover{background:var(--yellow);color:#000}
+.remote-hd .lock-btn-rm.unlocked{background:var(--greenBg);color:var(--green);border-color:rgba(46,204,113,.25)}
+.remote-hd .lock-btn-rm.unlocked:hover{background:var(--green);color:#000}
+
+/* remote password prompt */
+.rm-pw-prompt{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.rm-pw-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:32px 28px;width:360px;text-align:center}
+.rm-pw-box .pw-icon{font-size:36px;margin-bottom:10px}
+.rm-pw-box h3{font-size:16px;margin-bottom:4px}
+.rm-pw-box .pw-sub{font-size:12px;color:var(--dim);margin-bottom:18px}
+.rm-pw-box input{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radiusSm);color:var(--text);font-size:14px;text-align:center;outline:none}
+.rm-pw-box input:focus{border-color:var(--accent)}
+.rm-pw-box .pw-btns{margin-top:16px;display:flex;gap:8px;justify-content:center}
+.rm-pw-box .pw-btns button{padding:8px 28px;border-radius:var(--radiusSm);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.15s}
+.rm-pw-box .pw-err{font-size:11px;color:var(--red);margin-top:8px;display:none}
+.rm-pw-box .pw-hint{font-size:10px;color:var(--mute);margin-top:12px}
+
+/* remote control panel */
+.rm-panel{flex:1;overflow-y:auto;padding:10px 16px 30px;display:none}
+.rm-panel.show{display:block}
+.rm-group{border:1px solid var(--border);border-radius:var(--radiusSm);margin-bottom:8px;overflow:hidden}
+.rm-group-title{padding:9px 14px;font-size:10px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.5px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between}
+.rm-group-title::after{content:'\2212';font-size:14px;transition:.2s}
+.rm-group.collapsed .rm-group-title::after{content:'+'}
+.rm-group.collapsed .rm-group-body{display:none}
+.rm-group-body{padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.rm-group-body.col{flex-direction:column;align-items:stretch}
+.rm-btn{padding:6px 14px;border-radius:var(--radiusSm);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);transition:.12s;white-space:nowrap}
+.rm-btn:hover{background:var(--borderH)}
+.rm-btn:active{transform:scale(.96)}
+.rm-btn.pri{background:var(--accentBg);color:var(--accent);border-color:rgba(64,128,255,.3)}
+.rm-btn.pri:hover{background:var(--accent);color:#fff}
+.rm-btn.grn{background:var(--greenBg);color:var(--green);border-color:rgba(46,204,113,.3)}
+.rm-btn.grn:hover{background:var(--green);color:#fff}
+.rm-btn.dan{background:var(--redBg);color:var(--red);border-color:rgba(231,76,60,.3)}
+.rm-btn.dan:hover{background:var(--red);color:#fff}
+.rm-btn.war{background:var(--yellowBg);color:var(--yellow);border-color:rgba(240,180,41,.3)}
+.rm-btn.war:hover{background:var(--yellow);color:#000}
+.rm-sel{min-width:140px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radiusSm);color:var(--text);font-size:12px;cursor:pointer;outline:none;flex:1}
+.rm-sel option{background:var(--card);color:var(--text)}
+.rm-sel:focus{border-color:var(--accent)}
+.rm-inp{width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radiusSm);color:var(--text);font-size:12px;outline:none;text-align:center}
+.rm-inp:focus{border-color:var(--accent)}
+.rm-param{display:flex;align-items:center;gap:6px;width:100%}
+.rm-param .rm-lbl{font-size:11px;color:var(--dim);width:80px;text-align:right;flex-shrink:0}
+.rm-param .rm-val{font-size:11px;color:var(--text);font-weight:600;width:40px;text-align:right}
+.rm-param .rm-flex{flex:1}
+.rm-param-row{display:flex;align-items:center;gap:8px;width:100%;margin-bottom:4px}
+.rm-toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:10px 24px;border-radius:20px;font-size:13px;z-index:300;opacity:0;transition:opacity .25s;pointer-events:none}
+.rm-toast.show{opacity:1}
 </style>
 </head>
 <body>
@@ -311,6 +385,171 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
         <button class="btn-add-main" style="margin:10px auto" onclick="showAddModal()">+ 添加第一个房间</button>
       </div>
     </div>
+    <!-- ═══ REMOTE CONTROL VIEW ═══ -->
+    <div class="remote-view" id="remoteView">
+      <div class="remote-hd">
+        <button class="back-btn" onclick="hideRemoteControl()">← 返回大盘</button>
+        <span class="rm-title" id="rmTitle">🎮 远程控制</span>
+        <span class="rm-sub" id="rmSub"></span>
+        <span class="lock-status" style="margin-left:auto"><span class="dot locked" id="rmLockDot"></span><span id="rmLockText">已锁定</span></span>
+        <button class="lock-btn-rm locked" id="rmLockBtn" onclick="toggleRemoteLock()">🔒 点击解锁</button>
+      </div>
+      <div class="rm-pw-prompt" id="rmPwPrompt">
+        <div class="rm-pw-box">
+          <div class="pw-icon">🔐</div>
+          <h3>输入主控密码</h3>
+          <div class="pw-sub" id="rmPwSub"></div>
+          <input type="password" id="rmPwInput" placeholder="请输入主控密码" onkeydown="if(event.key==='Enter')verifyRemotePw()">
+          <div class="pw-err" id="rmPwErr">密码错误，请重试</div>
+          <div class="pw-btns">
+            <button style="background:var(--border);color:var(--dim)" onclick="hideRemoteControl()">取消</button>
+            <button style="background:var(--accent);color:#fff" onclick="verifyRemotePw()">解锁</button>
+          </div>
+          <div class="pw-hint">密码由主账号设定，30分钟无操作自动锁定</div>
+        </div>
+      </div>
+      <div class="rm-panel" id="rmPanel">
+        <!-- 1. 推流 & 录制 -->
+        <div class="rm-group">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">📡 推流 & 录制控制</div>
+          <div class="rm-group-body">
+            <button class="rm-btn pri" onclick="rmToast('▶ 开始推流')">▶ 开始推流</button>
+            <button class="rm-btn dan" onclick="rmToast('■ 停止推流')">■ 停止推流</button>
+            <button class="rm-btn grn" onclick="rmToast('● 开始录制')">● 开始录制</button>
+            <button class="rm-btn war" onclick="rmToast('⏹ 停止录制')">⏹ 停止录制</button>
+            <button class="rm-btn war" onclick="rmToast('⏸ 暂停录制')">⏸ 暂停录制</button>
+            <button class="rm-btn grn" onclick="rmToast('▶ 继续录制')">▶ 继续录制</button>
+            <button class="rm-btn" onclick="rmToast('📹 回放缓冲区已触发')">📹 触发回放缓冲</button>
+            <button class="rm-btn pri" onclick="rmToast('📷 虚拟摄像机已开启')">📷 虚拟摄像机</button>
+          </div>
+        </div>
+        <!-- 2. 场景切换 -->
+        <div class="rm-group">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎬 场景切换</div>
+          <div class="rm-group-body">
+            <select class="rm-sel" id="rmSceneSel"><option>加载中...</option></select>
+            <button class="rm-btn pri" onclick="rmToast('场景已切换')">切换到此场景</button>
+          </div>
+          <div class="rm-group-body" style="border-top:1px solid var(--border)">
+            <span style="font-size:11px;color:var(--dim);margin-right:4px">转场特效:</span>
+            <select class="rm-sel" style="min-width:auto;width:130px"><option>淡入淡出</option><option>滑入滑出</option><option>切换</option><option>渐变</option></select>
+            <button class="rm-btn" onclick="rmToast('转场特效已应用')">应用</button>
+            <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px;margin-left:6px"><input type="checkbox" checked> Studio 模式</label>
+          </div>
+        </div>
+        <!-- 3. 推流参数 -->
+        <div class="rm-group collapsed">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">⚙ 推流参数（服务器 / 码率）</div>
+          <div class="rm-group-body" style="flex-direction:column;gap:4px">
+            <div class="rm-param-row"><span class="rm-lbl">服务器</span><input class="rm-inp rm-flex" id="rmStreamSvr" style="text-align:left"></div>
+            <div class="rm-param-row"><span class="rm-lbl">推流密钥</span><input class="rm-inp rm-flex" type="password" id="rmStreamKey" style="text-align:left"> <button class="rm-btn" onclick="var i=document.getElementById('rmStreamKey');i.type=i.type==='password'?'text':'password'" title="显示/隐藏">👁</button></div>
+            <div class="rm-param-row"><span class="rm-lbl">视频码率</span><input class="rm-inp" style="width:90px" id="rmVBitrate" placeholder="Kbps"></div>
+            <div class="rm-param-row"><span class="rm-lbl">音频码率</span><input class="rm-inp" style="width:90px" id="rmABitrate" placeholder="Kbps"></div>
+            <button class="rm-btn pri" onclick="rmToast('✅ 推流参数已保存')">✅ 保存推流参数</button>
+          </div>
+        </div>
+        <!-- 4. 视频参数 -->
+        <div class="rm-group collapsed">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎥 视频参数（分辨率 / FPS / 编码器）</div>
+          <div class="rm-group-body" style="flex-direction:column;gap:4px">
+            <div class="rm-param-row"><span class="rm-lbl">基础画布</span><input class="rm-inp" style="width:70px" id="rmBaseW"> <span style="font-size:11px;color:var(--dim)">×</span> <input class="rm-inp" style="width:70px" id="rmBaseH"></div>
+            <div class="rm-param-row"><span class="rm-lbl">输出分辨率</span><input class="rm-inp" style="width:70px" id="rmOutW"> <span style="font-size:11px;color:var(--dim)">×</span> <input class="rm-inp" style="width:70px" id="rmOutH"></div>
+            <div class="rm-param-row"><span class="rm-lbl">FPS</span><select class="rm-sel" style="min-width:auto;width:80px"><option>60</option><option>30</option><option>25</option><option>24</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">视频编码器</span><select class="rm-sel"><option>NVIDIA NVENC H.264</option><option>NVIDIA NVENC HEVC</option><option>x264</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">关键帧间隔</span><input class="rm-inp" style="width:60px" value="2"> <span style="font-size:11px;color:var(--dim)">秒</span></div>
+            <button class="rm-btn pri" onclick="rmToast('✅ 视频参数已保存')">✅ 保存视频参数</button>
+          </div>
+        </div>
+        <!-- 5. 高级编码器 -->
+        <div class="rm-group collapsed">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🔧 高级编码器设置</div>
+          <div class="rm-group-body" style="flex-direction:column;gap:4px">
+            <div class="rm-param-row"><span class="rm-lbl">码率控制</span><select class="rm-sel"><option>CBR</option><option>VBR</option><option>CQP</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">预设</span><select class="rm-sel"><option>P5: 慢速(较高质量)</option><option>P1: 最慢(最高质量)</option><option>P3: 快速(较低质量)</option><option>P7: 最快(最低质量)</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">调优</span><select class="rm-sel"><option>高质量</option><option>低延迟</option><option>超低延迟</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">多次编码</span><select class="rm-sel" style="min-width:auto;width:100px"><option>禁用</option><option>1/4 分辨率</option><option>全分辨率</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">Profile</span><select class="rm-sel" style="min-width:auto;width:100px"><option>high</option><option>main</option><option>baseline</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">最大B帧</span><input class="rm-inp" style="width:60px" value="2"></div>
+            <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px;margin-top:4px"><input type="checkbox" checked> 前瞻</label>
+            <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px"><input type="checkbox" checked> 自适应量化</label>
+            <button class="rm-btn pri" onclick="rmToast('✅ 编码器参数已保存')">✅ 保存编码器参数</button>
+          </div>
+        </div>
+        <!-- 6. 混音器 -->
+        <div class="rm-group">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎚 混音器</div>
+          <div class="rm-group-body col" id="rmMixerBody">
+            <div style="font-size:10px;color:var(--mute);margin-bottom:4px">待 OBS 连接后加载音频源...</div>
+          </div>
+        </div>
+        <!-- 7. 源管理 -->
+        <div class="rm-group">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">📦 源管理</div>
+          <div class="rm-group-body">
+            <select class="rm-sel" id="rmSourceScene"><option>当前场景</option></select>
+            <select class="rm-sel" style="min-width:auto;width:120px"><option>+ 添加源</option><option>图像</option><option>媒体源</option><option>文本(GDI+)</option><option>浏览器</option><option>显示器捕获</option><option>游戏捕获</option><option>窗口捕获</option><option>视频捕获设备</option><option>音频输入捕获</option><option>音频输出捕获</option></select>
+            <button class="rm-btn pri" onclick="rmToast('源已添加')">添加</button>
+            <button class="rm-btn dan" onclick="rmToast('源已删除')">删除</button>
+          </div>
+          <div class="rm-group-body col" id="rmSourceList" style="border-top:1px solid var(--border)">
+            <div style="font-size:10px;color:var(--mute)">待 OBS 连接后加载源列表...</div>
+          </div>
+        </div>
+        <!-- 8. 滤镜 -->
+        <div class="rm-group collapsed">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎨 滤镜管理</div>
+          <div class="rm-group-body">
+            <select class="rm-sel" id="rmFilterSource"><option>选择源</option></select>
+            <select class="rm-sel" style="min-width:auto;width:140px"><option>+ 添加滤镜</option><option>降噪</option><option>增益</option><option>压缩器</option><option>色彩校正</option><option>绿幕扣像</option></select>
+            <button class="rm-btn pri" onclick="rmToast('滤镜已添加')">添加</button>
+            <button class="rm-btn dan" onclick="rmToast('滤镜已移除')">移除</button>
+          </div>
+        </div>
+        <!-- 9. 音频设置 -->
+        <div class="rm-group collapsed">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎧 音频设置</div>
+          <div class="rm-group-body" style="flex-direction:column;gap:4px">
+            <div class="rm-param-row"><span class="rm-lbl">采样率</span><select class="rm-sel"><option>44.1 kHz</option><option>48 kHz</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">声道</span><select class="rm-sel"><option>立体声</option><option>单声道</option></select></div>
+            <div style="font-size:10px;color:var(--mute);margin:8px 0 4px">全局音频设备:</div>
+            <div class="rm-param-row"><span class="rm-lbl">桌面音频</span><select class="rm-sel"><option>默认</option><option>禁用</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">麦克风</span><select class="rm-sel"><option>默认</option><option>禁用</option></select></div>
+            <button class="rm-btn pri" onclick="rmToast('✅ 音频设置已保存')">✅ 保存音频设置</button>
+          </div>
+        </div>
+        <!-- 10. 录制参数 -->
+        <div class="rm-group collapsed">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">💾 录制参数</div>
+          <div class="rm-group-body" style="flex-direction:column;gap:4px">
+            <div class="rm-param-row"><span class="rm-lbl">录制目录</span><input class="rm-inp rm-flex" style="text-align:left" placeholder="D:\OBS Recordings"></div>
+            <div class="rm-param-row"><span class="rm-lbl">视频编码器</span><select class="rm-sel"><option>使用推流编码器</option><option>NVIDIA NVENC H.264</option><option>x264</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">音频编码器</span><select class="rm-sel"><option>AAC (默认)</option><option>Opus</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">封装格式</span><select class="rm-sel"><option>mkv (推荐)</option><option>mp4</option><option>flv</option></select></div>
+            <button class="rm-btn pri" onclick="rmToast('✅ 录制参数已保存')">✅ 保存录制参数</button>
+          </div>
+        </div>
+        <!-- 11. 输出音频轨道 -->
+        <div class="rm-group collapsed">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎵 输出音频轨道</div>
+          <div class="rm-group-body" style="flex-direction:column;gap:4px">
+            <div class="rm-param-row"><span class="rm-lbl">轨道 1</span><input class="rm-inp" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" style="text-align:left" placeholder="名称"></div>
+            <div class="rm-param-row"><span class="rm-lbl">轨道 2</span><input class="rm-inp" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" style="text-align:left" placeholder="名称"></div>
+            <div class="rm-param-row"><span class="rm-lbl">轨道 3</span><input class="rm-inp" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" style="text-align:left" placeholder="名称"></div>
+            <div class="rm-param-row"><span class="rm-lbl">轨道 4</span><input class="rm-inp" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" style="text-align:left" placeholder="名称"></div>
+            <button class="rm-btn pri" onclick="rmToast('✅ 音频轨道已保存')">✅ 保存音频轨道</button>
+          </div>
+        </div>
+        <!-- 12. 快捷操作 -->
+        <div class="rm-group">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">⚡ 快捷操作</div>
+          <div class="rm-group-body">
+            <button class="rm-btn" onclick="rmToast('已切换场景')">🎮 切换场景</button>
+            <button class="rm-btn" onclick="rmToast('截图已保存')">📸 快速截图</button>
+            <button class="rm-btn war" onclick="rmToast('紧急刹车已触发')">🆘 紧急刹车</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -327,6 +566,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
     <div class="field"><label>🏢 办公区</label><input type="text" id="fldOffice" placeholder="如：望京SOHO" list="dlOffice"><datalist id="dlOffice"></datalist></div>
     <div class="field"><label>📋 楼层</label><input type="text" id="fldFloor" placeholder="如：3F" list="dlFloor"><datalist id="dlFloor"></datalist></div>
     <div class="field"><label>拉流地址（可选，留空自动推断）</label><input type="text" id="fldPullUrl" placeholder="自动从推流地址推断，也可手动填写"><span class="hint">联网后自动生成候选拉流地址，支持 HLS/FLV</span></div>
+    <div class="field"><label>🔐 主控密码（远程控制用）</label><input type="password" id="fldRemotePw" placeholder="设置后可通过远程控制管理 OBS"><span class="hint">留空则禁用远程控制；修改后旧密码立即失效</span></div>
     <div class="actions-row">
       <button id="btnDelete" style="display:none" class="danger" onclick="deleteRoom()">删除</button>
       <button class="primary" onclick="saveRoom()">保存</button>
@@ -334,6 +574,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
     </div>
   </div>
 </div>
+
+<!-- ═══ REMOTE CONTROL TOAST ═══ -->
+<div class="rm-toast" id="rmToast"></div>
 
 <!-- ═══ LOCATION MANAGER MODAL ═══ -->
 <div class="modal-overlay" id="locModalOverlay" style="display:none" onclick="if(event.target===this)hideLocModal()">
@@ -1722,6 +1965,7 @@ loadHierarchy();
 const videoPlayers = new Map();
 
 function renderAll() {
+  if (_rmRoomId) return; // 远程控制视图激活时跳过
   const grid = document.getElementById('roomGrid');
   grid.querySelectorAll('.card').forEach(c => c.remove());
   const es = document.getElementById('emptyState');
@@ -1738,6 +1982,7 @@ function renderAll() {
 
 // ★ 更新卡片但不摧毁 video 元素 — OBS 高频回调专用
 function updateAllCards() {
+  if (_rmRoomId) return; // 远程控制视图激活时跳过
   const grid = document.getElementById('roomGrid');
   const es = document.getElementById('emptyState');
   var filtered = roomManager.rooms.filter(function(r) { return matchesFilter(r); });
@@ -1879,10 +2124,10 @@ function createCard(room, st) {
       '<div class="left"><span class="sdot" style="background:' + dc + '"></span><span class="rname" title="' + e(room.name) + '">' + e(room.name) + '</span><span class="plt">' + e(room.platform) + '</span>' +
       (room.location ? '<span class="location-tag" title="\u70B9\u51FB\u5BFC\u822A\u5230 ' + e(room.location) + ' \u203A ' + e(room.officeArea || '') + ' \u203A ' + e(room.floor || '') + '" onclick="event.stopPropagation();navigateToRoom(' + JSON.stringify(room.location) + ',' + JSON.stringify(room.officeArea || '') + ',' + JSON.stringify(room.floor || '') + ')">' + e(room.location) + (room.floor ? ' \u203A ' + e(room.floor) : (room.officeArea ? ' \u203A ' + e(room.officeArea) : '')) + '</span>' : '') +
       '</div>' +
-      '<div class="acts"><button onclick="showEditModal(' + room.id + ')" title="编辑">✎</button><button onclick="reconnectRoom(' + room.id + ')" title="重连">↻</button></div>' +
+      '<div class="acts"><button onclick="showEditModal(' + room.id + ')" title="编辑">✎</button>' + (room.remotePassword ? '<button onclick="showRemoteControl(' + room.id + ')" title="远程控制" style="border:1px solid rgba(240,180,41,.25);color:#f0b429;border-radius:12px;padding:2px 8px;font-size:10px;font-weight:600">🔒 远程</button>' : '') + '<button onclick="reconnectRoom(' + room.id + ')" title="重连">↻</button></div>' +
     '</div>' +
     '<div class="video-area" id="va-' + room.id + '" onclick="togglePlay(' + room.id + ')">' +
-      '<video id="v-' + room.id + '" style="display:none" muted autoplay playsinline></video>' +
+      '<video id="v-' + room.id + '" style="display:none" autoplay playsinline></video>' +
       '<div class="overlay" id="ov-' + room.id + '">' +
         '<div class="status-badges">' +
         (st.status === 'connected' && st.streaming ? '<span class="stream-badge live">&bull; LIVE</span>' : '<span class="stream-badge off">&bull; 未推流</span>') +
@@ -1892,6 +2137,10 @@ function createCard(room, st) {
         '<div class="play-btn" id="pb-' + room.id + '">&#9654;</div>' +
         '<span class="play-hint" id="ph-' + room.id + '">' + (hasPull ? '点击播放拉流画面' : '未检测到拉流地址') + '</span>' +
         (!hasPull ? '<span class="no-url">推流后可自动推断拉流地址</span>' : '') +
+      '</div>' +
+      '<div class="video-volbar" id="vc-' + room.id + '" onclick="event.stopPropagation()">' +
+        '<button class="vol-btn" id="vm-' + room.id + '" onclick="event.stopPropagation();toggleMute(' + room.id + ')" title="静音">&#x1F50A;</button>' +
+        '<input type="range" class="vol-slider" id="vs-' + room.id + '" min="0" max="100" value="100" oninput="setVolume(' + room.id + ',this.value)" />' +
       '</div>' +
     '</div>' +
     // ── 模块行 ──
@@ -2013,6 +2262,7 @@ function togglePlay(id) {
     v.onstalled = null; v.onwaiting = null; v.onplaying = null;
     v.style.display = 'none'; ov.style.display = '';
     pb.textContent = '\u25B6'; ph.textContent = '已暂停';
+    hideVolBar(id);
     return;
   }
 
@@ -2044,7 +2294,6 @@ function startPlayback(v, ov, pb, ph, url) {
   if (v._hls) { try { v._hls.destroy(); } catch(e) {} v._hls = null; }
   v.src = '';
   v.style.display = '';
-  v.muted = true;
 
   const isFlv = url.endsWith('.flv') || url.includes('inzego.com') || url.includes('zego') || url.includes('.flv?');
   const isHls = url.endsWith('.m3u8');
@@ -2061,6 +2310,7 @@ function startPlayback(v, ov, pb, ph, url) {
     v.play().then(() => {
       v.style.display = ''; ov.style.display = 'none';
       pb.textContent = '\u23F8'; ph.textContent = '正在播放拉流画面';
+      showVolBar(v.id.replace('v-', ''));
     }).catch(e => {
       console.log('[Play] Error:', e.message);
       v.src = '';
@@ -2107,6 +2357,7 @@ function playWithFlv(v, ov, pb, ph, url) {
         if (player) { try { player.destroy(); } catch(e) {} player = null; v._flv = null; }
         v.style.display = 'none'; ov.style.display = '';
         pb.textContent = '\u25B6'; ph.textContent = '直播流断开';
+        hideVolBar(v.id.replace('v-', ''));
         return;
       }
       ph.textContent = '重连 (' + retries + ')';
@@ -2122,6 +2373,7 @@ function playWithFlv(v, ov, pb, ph, url) {
         if (player) { try { player.destroy(); } catch(e) {} player = null; v._flv = null; }
         v.style.display = 'none'; ov.style.display = '';
         pb.textContent = '\u25B6'; ph.textContent = '播放失败';
+        hideVolBar(v.id.replace('v-', ''));
         return;
       }
       ph.textContent = '重连 (' + retries + '/' + MAX + ')';
@@ -2131,6 +2383,7 @@ function playWithFlv(v, ov, pb, ph, url) {
     v.play().then(() => {
       ov.style.display = 'none'; v.style.display = '';
       pb.textContent = '\u23F8'; ph.textContent = 'FLV 直播中';
+      showVolBar(v.id.replace('v-', ''));
     }).catch(() => {});
 
     // ★ 心跳检测：currentTime 连续 3 次不变 → 自动重连
@@ -2180,13 +2433,14 @@ function playWithHls(v, ov, pb, ph, url) {
 
     h.on(Hls.Events.MANIFEST_PARSED, () => {
       v.style.display = '';
-      v.muted = true;
       const p = v.play();
       if (p) p.then(() => {
         ov.style.display = 'none';
         pb.textContent = '\u23F8';
         ph.textContent = '正在播放拉流画面 (HLS)';
         recoverCount = 0;
+        showVolBar(v.id.replace('v-', ''));
+      }).catch(e => {
       }).catch(e => {
         console.warn('[HLS] autoplay blocked:', e.message);
         ph.textContent = '点击画面开始播放';
@@ -2219,6 +2473,7 @@ function playWithHls(v, ov, pb, ph, url) {
         v.src = ''; v.style.display = 'none';
         ov.style.display = ''; pb.textContent = '\u25B6';
         ph.textContent = 'HLS 持续故障';
+        hideVolBar(v.id.replace('v-', ''));
         return;
       }
       ph.textContent = '自动重连 (' + recoverCount + '/' + MAX_RECOVER + ')...';
@@ -2247,6 +2502,35 @@ function altPlayback(v, ov, pb, ph) {
   ov.style.display = ''; pb.textContent = '\u25B6'; ph.textContent = '播放失败，请手动填写拉流地址';
 }
 
+// ═══ 音量控制 ═══
+function showVolBar(id) {
+  const bar = document.getElementById('vc-' + id);
+  if (bar) bar.classList.add('show');
+}
+function hideVolBar(id) {
+  const bar = document.getElementById('vc-' + id);
+  if (bar) bar.classList.remove('show');
+}
+function toggleMute(id) {
+  const v = document.getElementById('v-' + id);
+  const btn = document.getElementById('vm-' + id);
+  if (!v || !btn) return;
+  v.muted = !v.muted;
+  btn.innerHTML = v.muted ? '&#x1F507;' : '&#x1F50A;';
+  btn.title = v.muted ? '取消静音' : '静音';
+}
+function setVolume(id, val) {
+  const v = document.getElementById('v-' + id);
+  const btn = document.getElementById('vm-' + id);
+  if (v) v.volume = val / 100;
+  if (btn) {
+    const vol = parseInt(val);
+    if (vol === 0 || v.muted) { btn.innerHTML = '&#x1F507;'; }
+    else if (vol < 50) { btn.innerHTML = '&#x1F509;'; }
+    else { btn.innerHTML = '&#x1F50A;'; }
+  }
+}
+
 function updateSummary() {
   let t = roomManager.rooms.length, o = 0, s = 0, a = 0;
   for (const r of roomManager.rooms) { const st = roomManager.getState(r.id); if (st.status === 'connected') o++; if (st.streaming) s++; if (st.alerts && st.alerts.length > 0) a++; }
@@ -2268,6 +2552,7 @@ function showEditModal(id) {
   document.getElementById('fldPlatform').value = r.platform; document.getElementById('fldPullUrl').value = r.pullUrl || '';
   document.getElementById('fldLocation').value = r.location || ''; document.getElementById('fldOffice').value = r.officeArea || '';
   document.getElementById('fldFloor').value = r.floor || '';
+  document.getElementById('fldRemotePw').value = r.remotePassword || '';
   populateDatalists();
   document.getElementById('modalOverlay').style.display = '';
 }
@@ -2277,6 +2562,7 @@ function cf() {
   document.getElementById('fldPort').value = '4455'; document.getElementById('fldPass').value = '';
   document.getElementById('fldPlatform').value = '自有平台'; document.getElementById('fldPullUrl').value = '';
   document.getElementById('fldLocation').value = ''; document.getElementById('fldOffice').value = ''; document.getElementById('fldFloor').value = '';
+  document.getElementById('fldRemotePw').value = '';
 }
 function saveRoom() {
   const d = {
@@ -2288,7 +2574,8 @@ function saveRoom() {
     pullUrl: document.getElementById('fldPullUrl').value.trim(),
     location: document.getElementById('fldLocation').value.trim() || '',
     officeArea: document.getElementById('fldOffice').value.trim() || '',
-    floor: document.getElementById('fldFloor').value.trim() || ''
+    floor: document.getElementById('fldFloor').value.trim() || '',
+    remotePassword: document.getElementById('fldRemotePw').value
   };
   if (!d.name) { alert('请填写房间名称'); return; } if (!d.host) { alert('请填写 OBS WebSocket 地址'); return; }
   if (editingId) { roomManager.disconnect(editingId); roomManager.update(editingId, d); const r = roomManager.get(editingId); if (r) roomManager.connect(r); }
@@ -2297,6 +2584,171 @@ function saveRoom() {
 }
 function deleteRoom() { if (!editingId) return; if (!confirm('确定删除房间 "' + roomManager.get(editingId)?.name + '" 吗？')) return; roomManager.remove(editingId); hideModal(); renderAll(); renderSideTree(); updateSummary(); }
 function reconnectRoom(id) { roomManager.disconnect(id); const r = roomManager.get(id); if (r) roomManager.connect(r); updateAllCards(); }
+
+// ═══════════════════════════════════════
+// 远程控制
+// ═══════════════════════════════════════
+var _rmRoomId = null;
+var _rmLockTimer = null;
+var _rmToastTimer = null;
+
+function showRemoteControl(roomId) {
+  var r = roomManager.get(roomId);
+  if (!r || !r.remotePassword) { alert('该房间未设置主控密码，请先在编辑中设置'); return; }
+  _rmRoomId = roomId;
+  document.getElementById('rmTitle').textContent = '🎮 ' + r.name;
+  document.getElementById('rmSub').textContent = r.host + ':' + r.port;
+  document.getElementById('rmPwSub').textContent = r.host + ':' + r.port + ' — ' + r.name;
+  // 切换视图
+  document.getElementById('roomGrid').style.display = 'none';
+  document.getElementById('mainContent').querySelector('.main-hd').style.display = 'none';
+  document.getElementById('remoteView').classList.add('show');
+  document.getElementById('emptyState').style.display = 'none';
+  // 锁定状态
+  setRemoteLocked(true);
+  document.getElementById('rmPwPrompt').style.display = '';
+  document.getElementById('rmPanel').classList.remove('show');
+  document.getElementById('rmPwInput').value = '';
+  document.getElementById('rmPwErr').style.display = 'none';
+  setTimeout(function(){ document.getElementById('rmPwInput').focus(); }, 100);
+  // 加载OBS数据
+  loadRemoteOBSData(r);
+}
+
+function hideRemoteControl() {
+  _rmRoomId = null;
+  clearAutoLockTimer();
+  document.getElementById('roomGrid').style.display = '';
+  document.getElementById('mainContent').querySelector('.main-hd').style.display = '';
+  document.getElementById('remoteView').classList.remove('show');
+  // 恢复空状态显示逻辑
+  if (roomManager.rooms.length === 0) {
+    document.getElementById('emptyState').style.display = '';
+  }
+}
+
+function setRemoteLocked(locked) {
+  var dot = document.getElementById('rmLockDot');
+  var txt = document.getElementById('rmLockText');
+  var btn = document.getElementById('rmLockBtn');
+  if (locked) {
+    dot.className = 'dot locked'; txt.textContent = '已锁定';
+    btn.className = 'lock-btn-rm locked'; btn.textContent = '🔒 点击解锁'; btn.onclick = function(){ document.getElementById('rmPwPrompt').style.display = ''; document.getElementById('rmPanel').classList.remove('show'); document.getElementById('rmPwInput').value = ''; document.getElementById('rmPwErr').style.display = 'none'; setTimeout(function(){ document.getElementById('rmPwInput').focus(); }, 100); };
+    clearAutoLockTimer();
+  } else {
+    dot.className = 'dot unlocked'; txt.textContent = '已解锁';
+    btn.className = 'lock-btn-rm unlocked'; btn.textContent = '🔓 锁定'; btn.onclick = function(){ setRemoteLocked(true); };
+    startAutoLockTimer();
+  }
+}
+
+function toggleRemoteLock() {
+  var btn = document.getElementById('rmLockBtn');
+  if (btn.classList.contains('locked')) {
+    // 显示密码输入
+    document.getElementById('rmPwPrompt').style.display = '';
+    document.getElementById('rmPanel').classList.remove('show');
+    document.getElementById('rmPwInput').value = '';
+    document.getElementById('rmPwErr').style.display = 'none';
+    setTimeout(function(){ document.getElementById('rmPwInput').focus(); }, 100);
+  } else {
+    setRemoteLocked(true);
+  }
+}
+
+function verifyRemotePw() {
+  var r = roomManager.get(_rmRoomId);
+  if (!r) return;
+  var input = document.getElementById('rmPwInput').value;
+  if (input === r.remotePassword) {
+    document.getElementById('rmPwPrompt').style.display = 'none';
+    document.getElementById('rmPanel').classList.add('show');
+    setRemoteLocked(false);
+    document.getElementById('rmPwErr').style.display = 'none';
+    rmToast('✅ 远程控制已解锁');
+  } else {
+    document.getElementById('rmPwErr').style.display = '';
+    document.getElementById('rmPwInput').value = '';
+    document.getElementById('rmPwInput').focus();
+  }
+}
+
+function startAutoLockTimer() {
+  clearAutoLockTimer();
+  _rmLockTimer = setTimeout(function() {
+    setRemoteLocked(true);
+    rmToast('⏱ 30分钟无操作，远程控制已自动锁定');
+  }, 30 * 60 * 1000);
+  // 任何操作重置计时器
+  var resetTimer = function() {
+    if (!_rmRoomId) return;
+    clearAutoLockTimer();
+    if (!document.getElementById('rmLockBtn').classList.contains('locked')) {
+      _rmLockTimer = setTimeout(function() {
+        setRemoteLocked(true);
+        rmToast('⏱ 30分钟无操作，远程控制已自动锁定');
+      }, 30 * 60 * 1000);
+    }
+  };
+  document.getElementById('rmPanel').onclick = resetTimer;
+  document.getElementById('rmPanel').oninput = resetTimer;
+}
+
+function clearAutoLockTimer() {
+  if (_rmLockTimer) { clearTimeout(_rmLockTimer); _rmLockTimer = null; }
+  var panel = document.getElementById('rmPanel');
+  if (panel) { panel.onclick = null; panel.oninput = null; }
+}
+
+function rmToast(msg) {
+  var t = document.getElementById('rmToast');
+  if (!t) return;
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(_rmToastTimer);
+  _rmToastTimer = setTimeout(function(){ t.classList.remove('show'); }, 1800);
+}
+
+function loadRemoteOBSData(r) {
+  var st = roomManager.getState(r.id);
+  if (!st) return;
+  // 场景
+  if (st.scene && st.scene !== '--') {
+    var sel = document.getElementById('rmSceneSel');
+    sel.innerHTML = '<option>' + st.scene + '</option>';
+  }
+  // 推流参数 - 从 pushUrl 解析
+  if (st.pushUrl && st.pushUrl !== '--') {
+    var m = st.pushUrl.match(/^rtmp:\/\/([^/]+)(\/.*)$/);
+    if (m) {
+      document.getElementById('rmStreamSvr').value = 'rtmp://' + m[1];
+      var path = m[2];
+      var parts = path.replace(/^\//, '').split('/');
+      if (parts.length > 1) {
+        document.getElementById('rmStreamKey').value = parts[parts.length-1];
+      }
+    }
+  }
+  // 分辨率
+  if (st.resolution) {
+    var parts = st.resolution.split('x');
+    if (parts.length === 2) {
+      document.getElementById('rmBaseW').value = parts[0];
+      document.getElementById('rmBaseH').value = parts[1];
+    }
+  }
+  // FPS
+  if (st.fpsSet) {
+    var fpsSel = document.querySelector('#rmPanel select option[value="' + st.fpsSet + '"]');
+    // Just keep defaults for now, user can change
+  }
+  // 码率
+  if (st.bitrate && st.bitrate !== '--') {
+    document.getElementById('rmVBitrate').value = parseInt(st.bitrate);
+  }
+  if (st.audioBitrate && st.audioBitrate !== '--') {
+    document.getElementById('rmABitrate').value = parseInt(st.audioBitrate);
+  }
+}
 
 // ═══════════════════════════════════════
 // 工具函数
@@ -2334,7 +2786,21 @@ function copyText(t) {
 document.addEventListener('keydown', e => { const m = document.getElementById('modalOverlay'); if (m.style.display === 'none') return; if (e.key === 'Escape') { hideModal(); return; } if (e.key === 'Enter') { saveRoom(); return; } });
 window.addEventListener('beforeunload', () => { for (const [id, c] of roomManager.connections) c.destroy(); });
 setInterval(() => { updateAllCards(); updateSummary(); }, 3000);
-roomManager.connectAll(); renderAll(); renderSideTree(); updateSummary();
+// 从 obs-rooms.json 同步 remotePassword 到 localStorage
+(function initSync() {
+  fetch('/obs-rooms.json').then(function(r) { return r.ok ? r.json() : Promise.reject(); }).then(function(seed) {
+    var changed = false;
+    seed.forEach(function(s) {
+      if (s.remotePassword) {
+        var room = roomManager.rooms.find(function(r) { return r.name === s.name; });
+        if (room && !room.remotePassword) { room.remotePassword = s.remotePassword; changed = true; }
+      }
+    });
+    if (changed) { console.log('[initSync] remotePassword synced from obs-rooms.json'); roomManager.save(); }
+  }).catch(function(){}).finally(function() {
+    roomManager.connectAll(); renderAll(); renderSideTree(); updateSummary();
+  });
+})();
 
 // ═══ 日志小部件 ═══
 var _logMsgs = [];

@@ -1,9 +1,10 @@
 @echo off
 chcp 65001 >nul 2>&1
-title OBS Dashboard
+title OBS 监控大盘
 
-cd /d C:\Users\EDY\WorkBuddy\Claw
+cd /d "C:\Users\EDY\WorkBuddy\Claw"
 
-node start-dashboard.js
+echo 🚀 正在启动 OBS 监控大盘...
+start "" "C:\Users\EDY\WorkBuddy\Claw\node_modules\electron\dist\electron.exe" "C:\Users\EDY\WorkBuddy\Claw"
 
-pause
+exit

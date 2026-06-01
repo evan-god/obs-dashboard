@@ -8,7 +8,9 @@
     "password": "",
     "platform": "自有平台",
     "pullUrl": "",
-    "flvUrl": ""
+    "flvUrl": "",
+    "location": "北京",
+    "remotePassword": "123456"
   },
   {
     "id": 2,
