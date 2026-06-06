@@ -1,10 +1,26 @@
 <!DOCTYPE html>
-<!-- OBS 直播间监控大盘 v1.3.0 | CHANGELOG.md -->
+<!-- OBS 直播间监控大盘 v1.6.2 | CHANGELOG.md 
+  ★ (v1.3.7.12) 混音器远程面板渲染：首次加载显示音源名+电平条，周期刷新同步dB值，不复闪烁重绘
+  ★ (v1.3.8.0) 混音器大幅升级：音量滑块+静音按钮+右键菜单+设备选择+滤镜管理+高级音频属性
+  ★ (v1.3.8.1) 修复设备选择器/滤镜列表/高级音频弹窗使用错误的连接对象 r._conn → _rmGetConn()
+  ★ (v1.3.8.2) 修复防跳动守卫误判静态占位文字为已渲染，改用 .rm-mixer-row 选择器检查
+  ★ (v1.3.8.3) 修复 state._audioInputKinds 被响应式系统跳过（下划线前缀），重命名为 audioInputKinds；所有音频源统一显示设备选择器
+  ★ (v1.3.8.4) 修复设备查询 requestId 碰撞（Date.now() 同毫秒重复），改用全局计数器；增加详细调试日志
+  ★ (v1.3.7.11) 分组标题字号从10px增大到14px，颜色从暗灰(mute)改为明亮(text)，提升远程控制面板可读性
+  ★ (v1.3.7.10) 源列表样式强化（14px加粗卡片+悬停高亮），修复音频设置group结构丢失（收不起来）
+  ★ (v1.3.7.9) 场景控制重组：场景切换/源管理/滤镜管理合并为「场景控制」；修复源添加/删除/滤镜无法远程控制
+  ★ (v1.3.7.8) 删除旧"高级编码器设置"区域（残骸，元素ID/保存函数均无效），统一远程控制入口为"保存直播参数"
+  ★ (v1.3.7.7) 编码器设置面板动态切换：NVENC→预设/多次编码/前向参考/自适应量化，x264→CPU预设/微调/x264选项，与OBS UI保持一致
+  ★ 修复自定义选项清空后回跳：新增 _rmFieldDirty 按字段 dirty 标记系统
+  ★ 用户编辑过的字段即使为空字符串也强制写入（空=清除旧值）
+  ★ 回填时跳过 dirty 字段，避免轮询覆盖用户正在编辑的值
+  ★ (v1.3.7.5) 修复保存/轮询报错、slced_threads 拼写
+-->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OBS 直播间监控大盘</title>
+<title>OBS 直播间监控大盘 v1.6.2</title>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 <script src="https://cdn.jsdelivr.net/npm/flv.js@1"></script>
 <style>
@@ -23,7 +39,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .topbar{position:sticky;top:0;z-index:100;background:rgba(13,17,29,.94);
   backdrop-filter:blur(16px);border-bottom:1px solid var(--border);
   padding:8px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-.logo{font-size:15px;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.logo{font-size:15px;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:6px}.ver-tag{margin-left:2px;font-size:10px;font-weight:500;color:var(--accent);background:rgba(100,149,237,0.15);padding:1px 6px;border-radius:8px}
 .logo span{color:var(--accent)}
 .summary{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap}
 .summary-item{display:flex;align-items:center;gap:5px;padding:4px 10px;
@@ -38,6 +54,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .btn-io.export-btn:hover{background:var(--green);color:#fff;box-shadow:0 0 12px rgba(46,204,113,.3)}
 .btn-io.import-btn{border-color:var(--accent);color:var(--accent)}
 .btn-io.import-btn:hover{background:var(--accent);color:#fff;box-shadow:0 0 12px rgba(64,128,255,.3)}
+.btn-io.stats-btn{border-color:var(--purple,#9b59b6);color:var(--purple,#9b59b6)}
+.btn-io.stats-btn:hover{background:var(--purple,#9b59b6);color:#fff;box-shadow:0 0 12px rgba(155,89,182,.3)}
 
 /* ═══ LAYOUT: SIDEBAR + MAIN ═══ */
 .app-body{display:flex;height:calc(100vh - 48px);overflow:hidden}
@@ -223,6 +241,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .url-item .copy-btn{font-size:10px;background:var(--border);border:none;color:var(--dim);cursor:pointer;padding:2px 8px;border-radius:4px;white-space:nowrap}
 .url-item .copy-btn:hover{color:var(--text);background:var(--accent)}
 
+/* ═══ PARAMS COLLAPSE ═══ */
+.params-toggle{padding:4px 16px;font-size:12px;color:var(--dim);cursor:pointer;text-align:center;border-top:1px solid var(--border);background:rgba(255,255,255,.02);transition:background .2s,color .2s;user-select:none}
+.params-toggle:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.params-collapsible{overflow:hidden;transition:max-height .35s ease,opacity .3s ease;max-height:2000px;opacity:1}
+.params-collapsible.collapsed{max-height:0;opacity:0}
+
 /* ═══ FOOTER ═══ */
 .card-footer{padding:6px 16px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);font-size:11px;color:var(--mute);gap:8px}
 .card-footer .fi{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -263,6 +287,55 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .log-widget .log-controls button{background:var(--border);border:none;color:var(--dim);cursor:pointer;font-size:11px;padding:4px 12px;border-radius:4px;white-space:nowrap;transition:.15s;width:100%}
 .log-widget .log-controls button:hover{background:var(--accent);color:#fff}
 .log-widget .log-lines{overflow-y:auto;max-height:100px;font-family:Consolas,monospace;font-size:10px;color:var(--dim);line-height:1.4;white-space:pre-wrap;word-break:break-all}
+/* OBS 日志浮层弹窗 */
+.obslog-modal-overlay{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center}
+.obslog-modal{background:var(--card);border:1px solid var(--borderH);border-radius:12px;width:92vw;max-width:1200px;height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 48px rgba(0,0,0,.6);overflow:hidden}
+.obslog-modal .olm-hd{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(230,126,34,.06);flex-shrink:0}
+.obslog-modal .olm-hd .olm-title{font-weight:700;font-size:14px;color:var(--orange);flex:1}
+.obslog-modal .olm-hd .olm-close{background:none;border:none;color:var(--dim);cursor:pointer;font-size:18px;padding:2px 8px;border-radius:4px;line-height:1}
+.obslog-modal .olm-hd .olm-close:hover{color:var(--text);background:var(--border)}
+.obslog-modal .olm-toolbar{display:flex;gap:6px;padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;align-items:center}
+.obslog-modal .olm-toolbar select{flex:1;min-width:200px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;outline:none}
+.obslog-modal .olm-toolbar select#obsLogHostSel{flex:0 0 auto;min-width:160px;width:180px}
+.obslog-modal .olm-toolbar select#obsLogFileSel{flex:0 0 auto;min-width:260px;max-width:380px}
+.obslog-modal .olm-toolbar button{padding:5px 14px;border-radius:5px;font-size:12px;cursor:pointer;white-space:nowrap;transition:.15s;border:1px solid var(--border);background:var(--bg);color:var(--dim)}
+.obslog-modal .olm-toolbar button:hover{color:var(--text);border-color:var(--borderH)}
+.obslog-modal .olm-toolbar button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.obslog-modal .olm-toolbar button.primary:hover{box-shadow:0 0 12px rgba(64,128,255,.3)}
+.obslog-modal .olm-toolbar button.warn{background:var(--redBg);border-color:var(--red);color:var(--red)}
+.obslog-modal .olm-toolbar button.warn:hover{background:var(--red);color:#fff}
+.obslog-modal .olm-toolbar label{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.obslog-modal .olm-toolbar label input{margin:0;cursor:pointer}
+.obslog-modal .olm-body{flex:1;overflow:hidden;padding:0}
+.obslog-modal .olm-body textarea{width:100%;height:100%;background:rgba(0,0,0,.3);border:none;color:var(--text);font-family:Consolas,\"Cascadia Code\",monospace;font-size:11px;line-height:1.5;padding:12px 16px;resize:none;outline:none;tab-size:4;white-space:pre;overflow:auto}
+.obslog-modal .olm-status{padding:4px 16px;font-size:10px;color:var(--mute);border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:16px}
+/* 侧边栏 OBS 日志入口按钮 */
+.obslog-trigger{width:100%;background:rgba(230,126,34,.08);border:1px solid var(--border);color:var(--dim);cursor:pointer;font-size:11px;padding:5px 10px;border-radius:5px;transition:.15s;margin-bottom:6px;display:flex;align-items:center;gap:6px;justify-content:center}
+.obslog-trigger:hover{color:var(--orange);border-color:var(--orange)}
+/* 房间卡片 OBS 日志快捷入口 */
+.room-log-link{font-size:10px;color:var(--mute);cursor:pointer;background:rgba(230,126,34,.08);border:1px solid transparent;padding:2px 8px;border-radius:4px;white-space:nowrap;transition:.15s}
+.room-log-link:hover{color:var(--orange);border-color:var(--orange)}
+
+/* 侧边栏数据统计入口按钮 */
+.stats-trigger{width:100%;background:rgba(64,128,255,.08);border:1px solid var(--border);color:var(--dim);cursor:pointer;font-size:11px;padding:5px 10px;border-radius:5px;transition:.15s;margin-bottom:6px;display:flex;align-items:center;gap:6px;justify-content:center}
+.stats-trigger:hover{color:var(--accent);border-color:var(--accent)}
+
+/* ═══ STATS MODAL ═══ */
+.stats-body{flex:1;overflow:auto;padding:16px}
+.stats-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.stats-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px}
+.stats-card .sc-label{font-size:11px;color:var(--dim);margin-bottom:4px}
+.stats-card .sc-value{font-size:22px;font-weight:700;color:var(--accent)}
+.stats-card .sc-sub{font-size:10px;color:var(--mute);margin-top:2px}
+.stats-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:8px}
+.stats-table{width:100%;border-collapse:collapse;font-size:12px}
+.stats-table th{background:rgba(64,128,255,.08);color:var(--text);font-weight:600;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.stats-table td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap}
+.stats-table tbody tr:hover{background:rgba(255,255,255,.03)}
+.stats-table .num{text-align:right;font-variant-numeric:tabular-nums}
+.stats-table .ok{color:var(--green)}
+.stats-table .warn{color:var(--yellow)}
+.stats-table .bad{color:var(--red)}
 
 /* ═══ REMOTE CONTROL VIEW ═══ */
 .remote-view{flex:1;display:none;flex-direction:column;overflow-y:auto}
@@ -299,12 +372,52 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .rm-panel{flex:1;overflow-y:auto;padding:10px 16px 30px;display:none}
 .rm-panel.show{display:block}
 .rm-group{border:1px solid var(--border);border-radius:var(--radiusSm);margin-bottom:8px;overflow:hidden}
-.rm-group-title{padding:9px 14px;font-size:10px;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.5px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between}
-.rm-group-title::after{content:'\2212';font-size:14px;transition:.2s}
+.rm-group-title{padding:10px 14px;font-size:14px;font-weight:700;color:var(--text);letter-spacing:.3px;background:rgba(255,255,255,.04);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between}
+.rm-group-title::after{content:'\2212';font-size:16px;transition:.2s}
 .rm-group.collapsed .rm-group-title::after{content:'+'}
 .rm-group.collapsed .rm-group-body{display:none}
 .rm-group-body{padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .rm-group-body.col{flex-direction:column;align-items:stretch}
+/* 混音器行样式 */
+.rm-mixer-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px}
+.rm-mixer-name{flex:0 0 auto;min-width:100px;font-weight:500}
+.rm-mixer-bar{flex:1;height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}
+.rm-mixer-fill{height:100%;background:linear-gradient(90deg,#4080ff,#60c060,#e0a020,#e04040);border-radius:4px;transition:width .15s}
+.rm-mixer-db{flex:0 0 auto;width:56px;font-size:11px;text-align:right;color:var(--dim)}
+/* ★ v1.3.8.0 混音器增强：音量滑块、静音按钮、设备选择器、右键菜单 */
+.rm-mixer-row:hover{background:rgba(255,255,255,.02);border-radius:5px}
+.rm-mixer-vol{flex:1;min-width:60px;display:flex;align-items:center;gap:4px}
+.rm-mixer-vol input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--border);border-radius:2px;outline:none;cursor:pointer}
+.rm-mixer-vol input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 6px rgba(64,128,255,.4)}
+.rm-mixer-vol-val{font-size:10px;color:var(--dim);width:36px;text-align:right;flex-shrink:0}
+.rm-mixer-mute{flex-shrink:0;width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.12s}
+.rm-mixer-mute:hover{background:var(--borderH);color:var(--text)}
+.rm-mixer-mute.muted{background:var(--redBg);border-color:var(--red);color:var(--red)}
+.rm-mixer-device{flex:0 0 auto;min-width:100px;max-width:160px}
+.rm-mixer-device .rm-sel{min-width:auto;font-size:10px;padding:3px 6px}
+/* 右键菜单 */
+.rm-ctx-menu{position:fixed;z-index:9999;background:var(--card);border:1px solid var(--borderH);border-radius:var(--radius);padding:4px 0;min-width:180px;box-shadow:0 8px 32px rgba(0,0,0,.5);display:none}
+.rm-ctx-item{padding:7px 16px;font-size:12px;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:8px;transition:.08s}
+.rm-ctx-item:hover{background:var(--accentBg);color:var(--accent)}
+.rm-ctx-item.danger{color:var(--red)}
+.rm-ctx-item.danger:hover{background:var(--redBg)}
+.rm-ctx-divider{height:1px;background:var(--border);margin:3px 8px}
+/* 滤镜列表内联展开 */
+.rm-mixer-filters{margin-left:108px;font-size:11px;padding:2px 0 6px;display:none}
+.rm-mixer-filters.open{display:block}
+.rm-filter-item{display:flex;align-items:center;gap:8px;padding:3px 8px;margin:2px 0;background:var(--bg);border-radius:4px;font-size:11px}
+.rm-filter-item .rm-filter-name{flex:1;color:var(--text)}
+.rm-filter-item .rm-filter-kind{color:var(--dim);font-size:10px}
+.rm-filter-item .rm-filter-del{color:var(--red);cursor:pointer;font-size:10px;padding:2px 6px;border-radius:3px}
+.rm-filter-item .rm-filter-del:hover{background:var(--redBg)}
+/* 高级音频弹窗 */
+.rm-adv-modal{position:fixed;z-index:9998;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card);border:1px solid var(--borderH);border-radius:var(--radius);padding:16px;min-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6);display:none}
+.rm-adv-modal h4{font-size:14px;margin:0 0 12px;color:var(--accent)}
+.rm-adv-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px}
+.rm-adv-row .rm-adv-lbl{width:80px;text-align:right;color:var(--dim);flex-shrink:0}
+.rm-adv-tracks{display:flex;gap:8px;flex-wrap:wrap}
+.rm-adv-tracks label{display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;color:var(--text)}
+.rm-adv-tracks input{margin:0}
 .rm-btn{padding:6px 14px;border-radius:var(--radiusSm);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);transition:.12s;white-space:nowrap}
 .rm-btn:hover{background:var(--borderH)}
 .rm-btn:active{transform:scale(.96)}
@@ -336,7 +449,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 <div class="topbar">
   <div class="logo">
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    OBS <span>监控大盘</span>
+    OBS <span>监控大盘</span> <span class="ver-tag">v1.5.1</span>
   </div>
   <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importConfig(event)">
   <button class="btn-io export-btn" onclick="exportConfig()" title="导出所有房间和层级配置">📤 导出配置</button>
@@ -347,6 +460,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
     <div class="summary-item"><span class="dot" style="background:#e74c3c"></span>推流<span class="val" id="sumStreaming">0</span></div>
     <div class="summary-item"><span class="dot" style="background:var(--yellow)"></span>告警<span class="val" id="sumAlerts">0</span></div>
   </div>
+  <button class="btn-io stats-btn" onclick="openStatsModal()" title="数据统计分析">📊 统计</button>
 </div>
 
 <!-- ═══ APP BODY: SIDEBAR + MAIN ═══ -->
@@ -368,6 +482,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
           <div class="log-lines" id="logLines"></div>
         </div>
       </div>
+      <button class="obslog-trigger" onclick="openObsLogModal()">📋 OBS 日志</button>
+      <button class="stats-trigger" onclick="openStatsModal()" title="查看直播间历史数据统计">📊 数据统计</button>
       <button class="btn-manage-side" onclick="showLocManager()" title="管理层级结构" style="width:100%;background:rgba(64,128,255,.08);border:1px solid var(--border);color:var(--dim);cursor:pointer;font-size:11px;padding:5px 10px;border-radius:5px;transition:.15s" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--dim)';this.style.borderColor='var(--border)'">⚙ 管理层级</button>
     </div>
   </div>
@@ -413,143 +529,147 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
         <div class="rm-group">
           <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">📡 推流 & 录制控制</div>
           <div class="rm-group-body">
-            <button class="rm-btn pri" onclick="rmToast('▶ 开始推流')">▶ 开始推流</button>
-            <button class="rm-btn dan" onclick="rmToast('■ 停止推流')">■ 停止推流</button>
-            <button class="rm-btn grn" onclick="rmToast('● 开始录制')">● 开始录制</button>
-            <button class="rm-btn war" onclick="rmToast('⏹ 停止录制')">⏹ 停止录制</button>
-            <button class="rm-btn war" onclick="rmToast('⏸ 暂停录制')">⏸ 暂停录制</button>
-            <button class="rm-btn grn" onclick="rmToast('▶ 继续录制')">▶ 继续录制</button>
-            <button class="rm-btn" onclick="rmToast('📹 回放缓冲区已触发')">📹 触发回放缓冲</button>
-            <button class="rm-btn pri" onclick="rmToast('📷 虚拟摄像机已开启')">📷 虚拟摄像机</button>
+            <button class="rm-btn pri" onclick="rmStartStream()">▶ 开始推流</button>
+            <button class="rm-btn dan" onclick="rmStopStream()">■ 停止推流</button>
+            <button class="rm-btn grn" onclick="rmStartRecord()">● 开始录制</button>
+            <button class="rm-btn war" onclick="rmStopRecord()">⏹ 停止录制</button>
+            <button class="rm-btn war" onclick="rmPauseRecord()">⏸ 暂停录制</button>
+            <button class="rm-btn grn" onclick="rmResumeRecord()">▶ 继续录制</button>
+            <button class="rm-btn" onclick="rmTriggerReplayBuffer()">📹 触发回放缓冲</button>
+            <button class="rm-btn pri" onclick="rmToggleVirtualCam()">📷 虚拟摄像机</button>
           </div>
         </div>
-        <!-- 2. 场景切换 -->
+        <!-- 2. 场景控制（含场景切换 / 源管理 / 滤镜） -->
         <div class="rm-group">
-          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎬 场景切换</div>
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎬 场景控制</div>
+          <!-- 场景切换 -->
           <div class="rm-group-body">
             <select class="rm-sel" id="rmSceneSel"><option>加载中...</option></select>
-            <button class="rm-btn pri" onclick="rmToast('场景已切换')">切换到此场景</button>
+            <button class="rm-btn pri" onclick="rmSetScene()">切换到此场景</button>
           </div>
-          <div class="rm-group-body" style="border-top:1px solid var(--border)">
-            <span style="font-size:11px;color:var(--dim);margin-right:4px">转场特效:</span>
-            <select class="rm-sel" style="min-width:auto;width:130px"><option>淡入淡出</option><option>滑入滑出</option><option>切换</option><option>渐变</option></select>
-            <button class="rm-btn" onclick="rmToast('转场特效已应用')">应用</button>
-            <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:4px;margin-left:6px"><input type="checkbox" checked> Studio 模式</label>
+            <div class="rm-group-body" style="border-top:1px solid var(--border)">
+            <span style="font-size:11px;color:var(--dim);margin-right:4px">转场:</span>
+            <select class="rm-sel" id="rmTransitionSel" style="min-width:auto;width:130px">
+              <option value="">加载中...</option>
+            </select>
+            <button class="rm-btn" onclick="rmSetTransition()">应用</button>
+          </div>
+          <!-- 源管理 -->
+          <div class="rm-group-body" style="border-top:1px solid var(--border);flex-direction:column;align-items:stretch;gap:4px">
+            <div style="font-size:10px;color:var(--mute)">📦 源管理</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <select class="rm-sel" id="rmSourceSel" style="min-width:auto;width:120px"><option>+ 添加源</option><option>图像</option><option>媒体源</option><option>文本(GDI+)</option><option>浏览器</option><option>显示器捕获</option><option>游戏捕获</option><option>窗口捕获</option><option>视频捕获设备</option><option>音频输入捕获</option><option>音频输出捕获</option></select>
+              <button class="rm-btn pri" onclick="rmAddSource()">添加</button>
+              <button class="rm-btn dan" onclick="rmToggleRemoveSrc()">删除</button>
+            </div>
+            <!-- ★ v1.3.9.0 内联删除面板 -->
+            <div id="rmSourceDel" style="display:none;padding:4px 0;border-top:1px dashed var(--border);margin-top:2px">
+              <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+                <select class="rm-sel" id="rmSourceDelSel" style="min-width:auto;width:160px"><option>-- 选择要删除的源 --</option></select>
+                <button class="rm-btn dan" onclick="rmDoRemoveSource()" style="font-size:11px">确认删除</button>
+                <button class="rm-btn" onclick="rmHideRemoveSrc()" style="font-size:10px">取消</button>
+              </div>
+            </div>
+          </div>
+          <!-- 滤镜管理 -->
+          <div class="rm-group-body" style="border-top:1px solid var(--border);flex-direction:column;align-items:stretch;gap:4px">
+            <div style="font-size:10px;color:var(--mute)">🎨 滤镜管理</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <select class="rm-sel" id="rmFilterSource" style="min-width:auto;width:100px"><option>选择源</option></select>
+              <select class="rm-sel" id="rmFilterTypeSel" style="min-width:auto;width:100px"><option>+ 添加滤镜</option><option>降噪</option><option>增益</option><option>压缩器</option><option>色彩校正</option><option>绿幕扣像</option></select>
+              <button class="rm-btn pri" onclick="rmAddFilter()">添加</button>
+              <button class="rm-btn dan" onclick="rmRemoveFilter()">移除</button>
+            </div>
+            <div id="rmFilterList" style="font-size:10px;margin-top:4px;display:none"></div>
           </div>
         </div>
-        <!-- 3. 推流参数 -->
-        <div class="rm-group collapsed">
-          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">⚙ 推流参数（服务器 / 码率）</div>
+        <!-- 3. 直播参数（服务器 / 码率 / 分辨率 / 编码器） -->
+        <div class="rm-group">
+          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">📡 直播参数（服务器 / 比特率 / 分辨率）</div>
           <div class="rm-group-body" style="flex-direction:column;gap:4px">
+            <!-- 推流地址 -->
             <div class="rm-param-row"><span class="rm-lbl">服务器</span><input class="rm-inp rm-flex" id="rmStreamSvr" style="text-align:left"></div>
             <div class="rm-param-row"><span class="rm-lbl">推流密钥</span><input class="rm-inp rm-flex" type="password" id="rmStreamKey" style="text-align:left"> <button class="rm-btn" onclick="var i=document.getElementById('rmStreamKey');i.type=i.type==='password'?'text':'password'" title="显示/隐藏">👁</button></div>
-            <div class="rm-param-row"><span class="rm-lbl">视频码率</span><input class="rm-inp" style="width:90px" id="rmVBitrate" placeholder="Kbps"></div>
-            <div class="rm-param-row"><span class="rm-lbl">音频码率</span><input class="rm-inp" style="width:90px" id="rmABitrate" placeholder="Kbps"></div>
-            <button class="rm-btn pri" onclick="rmToast('✅ 推流参数已保存')">✅ 保存推流参数</button>
-          </div>
-        </div>
-        <!-- 4. 视频参数 -->
-        <div class="rm-group collapsed">
-          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎥 视频参数（分辨率 / FPS / 编码器）</div>
-          <div class="rm-group-body" style="flex-direction:column;gap:4px">
+            <!-- 码率 -->
+            <div class="rm-param-row"><span class="rm-lbl">比特率</span><input class="rm-inp" style="width:90px" id="rmVBitrate" placeholder="Kbps" onkeydown="if(event.key==='Enter')rmSaveStreamParams()" onblur="rmAutoSaveBitrate()"></div>
+            <div class="rm-param-row"><span class="rm-lbl">音频码率</span><input class="rm-inp" style="width:90px" id="rmABitrate" placeholder="Kbps" onkeydown="if(event.key==='Enter')rmSaveStreamParams()" onblur="rmAutoSaveBitrate()"></div>
+            <hr style="border:none;border-top:1px solid var(--border);margin:4px 0">
+            <!-- 分辨率 -->
             <div class="rm-param-row"><span class="rm-lbl">基础画布</span><input class="rm-inp" style="width:70px" id="rmBaseW"> <span style="font-size:11px;color:var(--dim)">×</span> <input class="rm-inp" style="width:70px" id="rmBaseH"></div>
             <div class="rm-param-row"><span class="rm-lbl">输出分辨率</span><input class="rm-inp" style="width:70px" id="rmOutW"> <span style="font-size:11px;color:var(--dim)">×</span> <input class="rm-inp" style="width:70px" id="rmOutH"></div>
-            <div class="rm-param-row"><span class="rm-lbl">FPS</span><select class="rm-sel" style="min-width:auto;width:80px"><option>60</option><option>30</option><option>25</option><option>24</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">视频编码器</span><select class="rm-sel"><option>NVIDIA NVENC H.264</option><option>NVIDIA NVENC HEVC</option><option>x264</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">关键帧间隔</span><input class="rm-inp" style="width:60px" value="2"> <span style="font-size:11px;color:var(--dim)">秒</span></div>
-            <button class="rm-btn pri" onclick="rmToast('✅ 视频参数已保存')">✅ 保存视频参数</button>
+            <div class="rm-param-row"><span class="rm-lbl">FPS</span><select class="rm-sel" id="rmFpsSel" style="min-width:auto;width:80px"><option>60</option><option>30</option><option>25</option><option>24</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">视频编码器</span><select class="rm-sel" id="rmEncSel" onchange="switchEncoderUI()"><option>NVIDIA NVENC H.264</option><option>NVIDIA NVENC HEVC</option><option>x264</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">关键帧间隔</span><input class="rm-inp" id="rmKeyint" style="width:60px" value="2" onkeydown="if(event.key==='Enter')rmSaveStreamParams()" onblur="rmAutoSaveKeyint()"> <span style="font-size:11px;color:var(--dim)">秒</span></div>
+            <hr style="border:none;border-top:1px solid var(--border);margin:4px 0">
+            <!-- 编码器高级参数 — 动态显示，匹配当前编码器 -->
+            <div id="rmRowRC" class="rm-param-row"><span class="rm-lbl">比特率控制</span><select class="rm-sel" id="rmRateCtrl" onchange="markEditing('rateCtrl')"><!-- 动态填充 --></select></div>
+            <div id="rmRowPreset" class="rm-param-row"><span class="rm-lbl" id="rmLblPreset">预设</span><select class="rm-sel" id="rmPreset" onchange="markEditing('preset')"><!-- 动态填充 --></select></div>
+            <div id="rmRowTune" class="rm-param-row"><span class="rm-lbl" id="rmLblTune">调节</span><select class="rm-sel" id="rmTune" onchange="markEditing('tune')"><!-- 动态填充 --></select></div>
+            <div id="rmRowMultipass" class="rm-param-row"><span class="rm-lbl">多次编码</span><select class="rm-sel" id="rmMultipass" onchange="markEditing('multipass')"><option value="disabled">关闭</option><option value="qres">两次编码（四分之一）</option><option value="fullres">两次编码（完整）</option></select></div>
+            <div id="rmRowProfile" class="rm-param-row"><span class="rm-lbl">配置文件</span><select class="rm-sel" id="rmProfile" onchange="markEditing('profile')"><!-- 动态填充 --></select></div>
+            <div id="rmRowLookahead" class="rm-param-row" style="align-items:center"><span class="rm-lbl">前向参考</span><input type="checkbox" id="rmLookahead" style="width:auto;margin:0" onclick="markEditing('lookahead')"></div>
+            <div id="rmRowPsychoAq" class="rm-param-row" style="align-items:center"><span class="rm-lbl">自适应量化</span><input type="checkbox" id="rmPsychoAq" style="width:auto;margin:0" onclick="markEditing('psychoAq')"></div>
+            <div id="rmRowBf" class="rm-param-row"><span class="rm-lbl">B帧</span><input class="rm-inp" id="rmBf" style="width:60px" value="2" oninput="markEditing('bf')"></div>
+            <div id="rmRowCustomOpts" class="rm-param-row"><span class="rm-lbl" id="rmLblCustomOpts">自定义编码器选项</span><input class="rm-inp rm-flex" id="rmCustomOpts" style="text-align:left" oninput="markEditing('customOpts')"></div>
+            <button class="rm-btn pri" onclick="rmSaveStreamParams()">✅ 保存直播参数</button>
           </div>
         </div>
-        <!-- 5. 高级编码器 -->
-        <div class="rm-group collapsed">
-          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🔧 高级编码器设置</div>
-          <div class="rm-group-body" style="flex-direction:column;gap:4px">
-            <div class="rm-param-row"><span class="rm-lbl">码率控制</span><select class="rm-sel"><option>CBR</option><option>VBR</option><option>CQP</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">预设</span><select class="rm-sel"><option>P5: 慢速(较高质量)</option><option>P1: 最慢(最高质量)</option><option>P3: 快速(较低质量)</option><option>P7: 最快(最低质量)</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">调优</span><select class="rm-sel"><option>高质量</option><option>低延迟</option><option>超低延迟</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">多次编码</span><select class="rm-sel" style="min-width:auto;width:100px"><option>禁用</option><option>1/4 分辨率</option><option>全分辨率</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">Profile</span><select class="rm-sel" style="min-width:auto;width:100px"><option>high</option><option>main</option><option>baseline</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">最大B帧</span><input class="rm-inp" style="width:60px" value="2"></div>
-            <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px;margin-top:4px"><input type="checkbox" checked> 前瞻</label>
-            <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px"><input type="checkbox" checked> 自适应量化</label>
-            <button class="rm-btn pri" onclick="rmToast('✅ 编码器参数已保存')">✅ 保存编码器参数</button>
-          </div>
-        </div>
-        <!-- 6. 混音器 -->
+        <!-- 4. 混音器 -->
         <div class="rm-group">
           <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎚 混音器</div>
           <div class="rm-group-body col" id="rmMixerBody">
             <div style="font-size:10px;color:var(--mute);margin-bottom:4px">待 OBS 连接后加载音频源...</div>
           </div>
         </div>
-        <!-- 7. 源管理 -->
-        <div class="rm-group">
-          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">📦 源管理</div>
-          <div class="rm-group-body">
-            <select class="rm-sel" id="rmSourceScene"><option>当前场景</option></select>
-            <select class="rm-sel" style="min-width:auto;width:120px"><option>+ 添加源</option><option>图像</option><option>媒体源</option><option>文本(GDI+)</option><option>浏览器</option><option>显示器捕获</option><option>游戏捕获</option><option>窗口捕获</option><option>视频捕获设备</option><option>音频输入捕获</option><option>音频输出捕获</option></select>
-            <button class="rm-btn pri" onclick="rmToast('源已添加')">添加</button>
-            <button class="rm-btn dan" onclick="rmToast('源已删除')">删除</button>
-          </div>
-          <div class="rm-group-body col" id="rmSourceList" style="border-top:1px solid var(--border)">
-            <div style="font-size:10px;color:var(--mute)">待 OBS 连接后加载源列表...</div>
-          </div>
-        </div>
-        <!-- 8. 滤镜 -->
-        <div class="rm-group collapsed">
-          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎨 滤镜管理</div>
-          <div class="rm-group-body">
-            <select class="rm-sel" id="rmFilterSource"><option>选择源</option></select>
-            <select class="rm-sel" style="min-width:auto;width:140px"><option>+ 添加滤镜</option><option>降噪</option><option>增益</option><option>压缩器</option><option>色彩校正</option><option>绿幕扣像</option></select>
-            <button class="rm-btn pri" onclick="rmToast('滤镜已添加')">添加</button>
-            <button class="rm-btn dan" onclick="rmToast('滤镜已移除')">移除</button>
-          </div>
-        </div>
-        <!-- 9. 音频设置 -->
+        <!-- 5. 音频设置 -->
         <div class="rm-group collapsed">
           <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎧 音频设置</div>
           <div class="rm-group-body" style="flex-direction:column;gap:4px">
-            <div class="rm-param-row"><span class="rm-lbl">采样率</span><select class="rm-sel"><option>44.1 kHz</option><option>48 kHz</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">声道</span><select class="rm-sel"><option>立体声</option><option>单声道</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">采样率</span><select class="rm-sel" id="rmSampleRateSel"><option>44.1 kHz</option><option>48 kHz</option></select></div>
+            <div class="rm-param-row"><span class="rm-lbl">声道</span><select class="rm-sel" id="rmChannelSel"><option>立体声</option><option>单声道</option></select></div>
             <div style="font-size:10px;color:var(--mute);margin:8px 0 4px">全局音频设备:</div>
             <div class="rm-param-row"><span class="rm-lbl">桌面音频</span><select class="rm-sel"><option>默认</option><option>禁用</option></select></div>
             <div class="rm-param-row"><span class="rm-lbl">麦克风</span><select class="rm-sel"><option>默认</option><option>禁用</option></select></div>
-            <button class="rm-btn pri" onclick="rmToast('✅ 音频设置已保存')">✅ 保存音频设置</button>
+            <button class="rm-btn pri" onclick="rmSaveAudioSettings()">✅ 保存音频设置</button>
           </div>
         </div>
-        <!-- 10. 录制参数 -->
-        <div class="rm-group collapsed">
-          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">💾 录制参数</div>
-          <div class="rm-group-body" style="flex-direction:column;gap:4px">
-            <div class="rm-param-row"><span class="rm-lbl">录制目录</span><input class="rm-inp rm-flex" style="text-align:left" placeholder="D:\OBS Recordings"></div>
-            <div class="rm-param-row"><span class="rm-lbl">视频编码器</span><select class="rm-sel"><option>使用推流编码器</option><option>NVIDIA NVENC H.264</option><option>x264</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">音频编码器</span><select class="rm-sel"><option>AAC (默认)</option><option>Opus</option></select></div>
-            <div class="rm-param-row"><span class="rm-lbl">封装格式</span><select class="rm-sel"><option>mkv (推荐)</option><option>mp4</option><option>flv</option></select></div>
-            <button class="rm-btn pri" onclick="rmToast('✅ 录制参数已保存')">✅ 保存录制参数</button>
-          </div>
-        </div>
-        <!-- 11. 输出音频轨道 -->
+        <!-- 6. 输出音频轨道 -->
         <div class="rm-group collapsed">
           <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">🎵 输出音频轨道</div>
           <div class="rm-group-body" style="flex-direction:column;gap:4px">
-            <div class="rm-param-row"><span class="rm-lbl">轨道 1</span><input class="rm-inp" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" style="text-align:left" placeholder="名称"></div>
-            <div class="rm-param-row"><span class="rm-lbl">轨道 2</span><input class="rm-inp" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" style="text-align:left" placeholder="名称"></div>
-            <div class="rm-param-row"><span class="rm-lbl">轨道 3</span><input class="rm-inp" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" style="text-align:left" placeholder="名称"></div>
-            <div class="rm-param-row"><span class="rm-lbl">轨道 4</span><input class="rm-inp" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" style="text-align:left" placeholder="名称"></div>
-            <button class="rm-btn pri" onclick="rmToast('✅ 音频轨道已保存')">✅ 保存音频轨道</button>
-          </div>
-        </div>
-        <!-- 12. 快捷操作 -->
-        <div class="rm-group">
-          <div class="rm-group-title" onclick="this.parentElement.classList.toggle('collapsed')">⚡ 快捷操作</div>
-          <div class="rm-group-body">
-            <button class="rm-btn" onclick="rmToast('已切换场景')">🎮 切换场景</button>
-            <button class="rm-btn" onclick="rmToast('截图已保存')">📸 快速截图</button>
-            <button class="rm-btn war" onclick="rmToast('紧急刹车已触发')">🆘 紧急刹车</button>
+            <div class="rm-param-row"><span class="rm-lbl">轨道 1</span><input class="rm-inp" id="rmTrack1Bitrate" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" id="rmTrack1Name" style="text-align:left" placeholder="名称"></div>
+            <div class="rm-param-row"><span class="rm-lbl">轨道 2</span><input class="rm-inp" id="rmTrack2Bitrate" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" id="rmTrack2Name" style="text-align:left" placeholder="名称"></div>
+            <div class="rm-param-row"><span class="rm-lbl">轨道 3</span><input class="rm-inp" id="rmTrack3Bitrate" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" id="rmTrack3Name" style="text-align:left" placeholder="名称"></div>
+            <div class="rm-param-row"><span class="rm-lbl">轨道 4</span><input class="rm-inp" id="rmTrack4Bitrate" style="width:60px" value="160"> <span style="font-size:10px;color:var(--dim)">Kbps</span> <input class="rm-inp rm-flex" id="rmTrack4Name" style="text-align:left" placeholder="名称"></div>
+            <button class="rm-btn pri" onclick="rmSaveAudioTracks()">✅ 保存音频轨道</button>
           </div>
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ★ v1.3.8.0 混音器右键菜单 & 高级音频弹窗 -->
+<div class="rm-ctx-menu" id="rmCtxMenu"></div>
+<div class="rm-adv-modal" id="rmAdvAudioModal">
+  <h4>🎛 高级音频属性</h4>
+  <div class="rm-adv-row"><span class="rm-adv-lbl">音频源</span><strong id="rmAdvSrcName" style="color:var(--accent)">--</strong></div>
+  <div class="rm-adv-row"><span class="rm-adv-lbl">监听模式</span>
+    <select class="rm-sel" id="rmAdvMonitor">
+      <option value="none">关闭监听</option><option value="monitorOnly">仅监听(不输出)</option><option value="monitorAndOutput">监听并输出</option>
+    </select>
+  </div>
+  <div class="rm-adv-row"><span class="rm-adv-lbl">同步偏移</span><input class="rm-inp" id="rmAdvSyncOffset" style="width:80px" value="0" type="number"> <span style="font-size:10px;color:var(--dim)">ms</span></div>
+  <div class="rm-adv-row"><span class="rm-adv-lbl">音频轨道</span>
+    <div class="rm-adv-tracks" id="rmAdvTracks">
+      <label><input type="checkbox" value="1"> 轨道1</label><label><input type="checkbox" value="2"> 轨道2</label>
+      <label><input type="checkbox" value="3"> 轨道3</label><label><input type="checkbox" value="4"> 轨道4</label>
+      <label><input type="checkbox" value="5"> 轨道5</label><label><input type="checkbox" value="6"> 轨道6</label>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+    <button class="rm-btn" onclick="document.getElementById('rmAdvAudioModal').style.display='none'">取消</button>
+    <button class="rm-btn pri" onclick="rmSaveAdvAudio()">✅ 保存</button>
   </div>
 </div>
 
@@ -586,6 +706,339 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
     <div class="add-row add-top">
       <input type="text" id="newLocName" placeholder="新地点名称（如：深圳）">
       <button onclick="addLocation()">+ 添加地点</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ OBS 日志查看浮层 ═══ -->
+<div class="obslog-modal-overlay" id="obsLogModalOverlay" style="display:none" onclick="if(event.target===this)closeObsLogModal()">
+  <div class="obslog-modal">
+    <div class="olm-hd">
+      <span id="obsLogModalMainTitle">📋 OBS 日志查看器</span>
+      <span class="olm-title" id="obsLogModalTitle" style="font-size:11px;font-weight:400;color:var(--dim)"></span>
+      <button class="olm-close" onclick="closeObsLogModal()" title="关闭 (Esc)">✕</button>
+    </div>
+    <div class="olm-toolbar">
+      <select id="obsLogHostSel" onchange="obsLogSwitchHost()" title="选择要查看日志的主机"></select>
+      <select id="obsLogFileSel" onchange="obsLogLoadSelectedFile()" title="选择日志文件"><option value="">— 选择日志文件 —</option></select>
+      <button onclick="obsLogRefresh2()" title="刷新日志">🔄 刷新</button>
+      <button onclick="obsLogCopyAll()">📋 复制全部</button>
+      <button onclick="obsLogCopyTail()">📋 复制最后100行</button>
+      <button onclick="obsLogExport()">💾 导出日志</button>
+      <button onclick="obsLogClearView()" class="warn">🗑 清空显示</button>
+      <button onclick="openDeployHelp()" title="查看部署说明" style="background:rgba(100,200,255,.12);border:1px solid rgba(100,200,255,.3)">📥 部署说明</button>
+      <label title="每5秒自动刷新最新日志"><input type="checkbox" id="obsLogAutoRefresh" onchange="obsLogToggleAutoRefresh()"> 自动刷新</label>
+      <span id="obsLogStatus" style="font-size:10px;color:var(--mute);margin-left:auto"></span>
+    </div>
+    <div class="olm-body" style="position:relative">
+      <textarea id="obsLogTextarea" readonly placeholder="点击 🔄 刷新 加载日志..." spellcheck="false"></textarea>
+    </div>
+    <div class="olm-status">
+      <span id="obsLogFileInfo">未加载</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 部署说明浮层 ═══ -->
+<div class="obslog-modal-overlay" id="deployHelpOverlay" style="display:none" onclick="if(event.target===this)closeDeployHelp()">
+  <div class="obslog-modal" style="max-width:700px;width:94vw;height:auto;max-height:90vh">
+    <div class="olm-hd" style="background:rgba(100,200,255,.08)">
+      <span>📥 OBS 日志服务 — 部署说明</span>
+      <button class="olm-close" onclick="closeDeployHelp()" title="关闭 (Esc)">✕</button>
+    </div>
+    <div style="padding:20px 24px;overflow:auto;flex:1;font-size:13px;line-height:1.7;color:var(--text)">
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- 场景选择 -->
+      <!-- ══════════════════════════════════════ -->
+      <p style="margin-top:0;font-weight:700;font-size:15px;color:var(--text)">请先确认你是哪种情况：</p>
+
+      <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+        <!-- 场景 A -->
+        <div style="flex:1;min-width:220px;background:rgba(64,128,255,.05);border:1px solid rgba(64,128,255,.25);border-radius:10px;padding:14px 16px">
+          <p style="font-weight:700;color:var(--accent);margin:0 0 6px 0;font-size:14px">🖥 场景 A：我要一台新电脑当监控大盘</p>
+          <p style="font-size:11px;color:var(--dim);margin:0;line-height:1.6">
+            电脑是全新的，或者刚重装系统，<br>
+            想把这台电脑变成「总控台」来监控所有直播间。
+          </p>
+          <button onclick="document.getElementById('scenarioA').scrollIntoView({behavior:'smooth'})" style="margin-top:10px;font-size:12px;padding:4px 12px;border-radius:4px;border:1px solid var(--accent);background:rgba(64,128,255,.12);color:var(--accent);cursor:pointer;font-weight:600">👉 点我跳转到场景 A</button>
+        </div>
+        <!-- 场景 B -->
+        <div style="flex:1;min-width:220px;background:rgba(255,193,7,.04);border:1px solid rgba(255,193,7,.2);border-radius:10px;padding:14px 16px">
+          <p style="font-weight:700;color:var(--warning);margin:0 0 6px 0;font-size:14px">🎥 场景 B：我要给直播间 OBS 电脑装日志服务</p>
+          <p style="font-size:11px;color:var(--dim);margin:0;line-height:1.6">
+            直播间电脑已经在运行 OBS 直播了，<br>
+            想让监控大盘能远程查看它的日志。
+          </p>
+          <button onclick="document.getElementById('scenarioB').scrollIntoView({behavior:'smooth'})" style="margin-top:10px;font-size:12px;padding:4px 12px;border-radius:4px;border:1px solid var(--warning);background:rgba(255,193,7,.1);color:var(--warning);cursor:pointer;font-weight:600">👉 点我跳转到场景 B</button>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- 场景 A：新监控电脑安装 -->
+      <!-- ══════════════════════════════════════ -->
+      <div id="scenarioA" style="background:rgba(64,128,255,.06);border:2px solid var(--accent);border-radius:10px;padding:16px 20px;margin:0 0 20px 0">
+        <p style="font-weight:700;color:var(--accent);margin:0 0 10px 0;font-size:15px">🖥 场景 A：全新安装监控大盘（新电脑当总控台）</p>
+
+        <p style="font-size:12px;color:var(--dim);margin:0 0 12px 0">
+          监控大盘软件是<b>绿色免安装</b>的，不需要安装任何东西，直接复制文件夹就能用。
+        </p>
+
+        <p style="font-weight:600;color:var(--text);margin:16px 0 4px 0">📂 第一步：复制监控大盘文件夹</p>
+        <ol style="padding-left:20px;margin:4px 0 12px;font-size:12px;line-height:1.9">
+          <li>在<b>当前这台监控电脑</b>上，找到 exe 所在的文件夹<br>
+            <span style="color:var(--dim)">（里面有 OBS直播间监控大盘.exe、obs-dashboard.html 等文件）</span></li>
+          <li>把<b>整个文件夹</b>复制到 U 盘（或通过网络共享发送）</li>
+          <li>在新电脑上，把文件夹粘贴到任意位置（建议放 D 盘根目录，如 <code style="color:var(--accent)">D:\obs-dashboard</code>）</li>
+        </ol>
+
+        <p style="font-weight:600;color:var(--text);margin:16px 0 4px 0">🚀 第二步：双击运行</p>
+        <ol style="padding-left:20px;margin:4px 0 12px;font-size:12px;line-height:1.9">
+          <li>打开文件夹，找到 <code style="color:var(--accent);font-weight:700">OBS直播间监控大盘.exe</code></li>
+          <li><b>双击</b>运行</li>
+          <li>软件会自动打开窗口，显示监控大盘界面</li>
+        </ol>
+
+        <p style="font-weight:600;color:var(--text);margin:16px 0 4px 0">🟢 第三步：确认连接</p>
+        <ol style="padding-left:20px;margin:4px 0 12px;font-size:12px;line-height:1.9">
+          <li>监控大盘打开后，左侧会显示已配置的直播间列表</li>
+          <li>点击某个直播间，确认能看到推流画面和控制面板</li>
+          <li>如果看不到直播间，需要先在 HTML 里配置直播间 IP 地址（见下方说明）</li>
+        </ol>
+
+        <div style="background:rgba(76,175,80,.08);border:1px solid rgba(76,175,80,.2);border-radius:6px;padding:10px 14px;margin:12px 0 0 0;font-size:11px;color:var(--dim);line-height:1.7">
+          <p style="font-weight:600;color:var(--success);margin:0 0 6px 0;font-size:12px">✅ 新监控电脑 <b>不需要</b>安装的东西：</p>
+           ❌ 不需要装 Node.js &nbsp;— Electron 自带运行环境<br>
+           ❌ 不需要装 OBS &nbsp;&nbsp;&nbsp;&nbsp;— 除非这台电脑也要直播<br>
+           ❌ 不需要装任何依赖 &nbsp;— 所有文件都在文件夹里<br>
+           ❌ 不需要管理员权限 &nbsp;— 直接双击就能运行<br><br>
+          <b>监控电脑唯一需要的条件：</b><br>
+           ✅ 能和 OBS 直播间电脑互相 ping 通（同一局域网或 VPN）<br>
+           ✅ 防火墙允许本机访问远程 4455 和 8393 端口（出站默认放行，一般不用管）<br><br>
+          <span style="color:var(--mute)">💡 如果想看<b>监控电脑自己</b>的 OBS 日志（这台电脑也在跑 OBS 的话），<br>需要给它也部署日志服务 → 看下面的「场景 B」。</span>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- 场景 B 标题 -->
+      <!-- ══════════════════════════════════════ -->
+      <a name="scenarioB"></a>
+      <div id="scenarioB" style="background:rgba(255,193,7,.06);border:2px solid rgba(255,193,7,.3);border-radius:10px;padding:14px 18px;margin:0 0 20px 0">
+        <p style="font-weight:700;color:var(--warning);margin:0;font-size:15px">🎥 场景 B：给 OBS 直播间主机部署日志服务</p>
+        <p style="font-size:12px;color:var(--dim);margin:8px 0 0 0">
+          下面要做的，是给<b>每一台运行 OBS 的直播间电脑</b>装一个小程序。<br>
+          装好之后，你在这台监控大盘上点一下按钮，就能直接看到那台电脑的 OBS 日志。
+        </p>
+      </div>
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- 第一步：准备工作 -->
+      <!-- ══════════════════════════════════════ -->
+      <div style="background:rgba(64,128,255,.06);border-left:3px solid var(--accent);padding:12px 16px;margin:0 0 16px 0;border-radius:0 8px 8px 0">
+        <p style="font-weight:700;color:var(--accent);margin:0 0 8px 0;font-size:14px">第一步：准备工作（在监控大盘这台电脑上做）</p>
+        
+        <p style="font-weight:600;color:var(--text);margin:12px 0 4px 0">📍 找到这两个文件：</p>
+        <p style="font-size:12px;color:var(--dim);margin:0 0 8px 0">
+          打开 obs-dashboard.exe 所在的文件夹，你会看到同目录下有：
+        </p>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 16px;margin:4px 0 12px;font-family:Consolas,monospace;font-size:12px;color:var(--text);line-height:1.9">
+          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+            <span>📄 <b>obs-log-service.js</b>（日志服务主程序）</span>
+            <button onclick="navigator.clipboard.writeText('obs-log-service.js')" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:rgba(100,200,255,.12);color:var(--accent);cursor:pointer" title="复制文件名">📋 复制文件名</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;margin-top:2px">
+            <span>📄 <b>install-obs-log-service.bat</b>（一键安装脚本，双击即可）</span>
+            <button onclick="navigator.clipboard.writeText('install-obs-log-service.bat')" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:rgba(100,200,255,.12);color:var(--accent);cursor:pointer" title="复制文件名">📋 复制文件名</button>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--dim);margin:0">
+          💡 把这两个文件复制到 U 盘，或者通过微信/QQ 发送给自己，后面要放到 OBS 直播间电脑上。
+        </p>
+      </div>
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- 第二步：OBS 主机安装 Node.js -->
+      <!-- ══════════════════════════════════════ -->
+      <div style="background:rgba(255,193,7,.06);border-left:3px solid var(--warning);padding:12px 16px;margin:0 0 16px 0;border-radius:0 8px 8px 0">
+        <p style="font-weight:700;color:var(--warning);margin:0 0 8px 0;font-size:14px">第二步：安装 Node.js（在 OBS 直播间电脑上做）</p>
+
+        <p style="font-size:12px;color:var(--dim);margin:0 0 4px 0">
+          <b>Node.js 是什么？</b> 它是一个运行环境，就像你要运行 Python 脚本需要先装 Python 一样，<br>
+          要运行 <code>.js</code> 文件就需要 Node.js。装一次就行，以后不用管。
+        </p>
+
+        <p style="font-weight:600;color:var(--text);margin:16px 0 4px 0">📥 下载安装（约 2 分钟）：</p>
+        <ol style="padding-left:20px;margin:4px 0 12px;font-size:12px;line-height:2">
+          <li>打开浏览器，访问 <a href="https://nodejs.org/" target="_blank" style="color:var(--accent);font-weight:700">https://nodejs.org/</a></li>
+          <li>点击左边的绿色大按钮（写着 <b>LTS</b>），会自动下载安装包</li>
+          <li>下载完成后双击运行，一路点 <b>"Next"</b>（下一步），全部用默认选项</li>
+          <li>最后点 <b>"Install"</b>（安装），等待进度条走完</li>
+          <li>完成后点 <b>"Finish"</b>（完成）</li>
+        </ol>
+        <p style="font-size:11px;color:var(--dim);margin:0;padding:4px 8px;background:rgba(255,255,255,.03);border-radius:4px">
+          🔰 别担心，Node.js 是免费开源的，全球几百万开发者都在用，安全无毒，装完不会影响电脑其他功能。
+        </p>
+      </div>
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- 第三步：复制文件并运行安装脚本 -->
+      <!-- ══════════════════════════════════════ -->
+      <div style="background:rgba(76,175,80,.06);border-left:3px solid var(--success);padding:12px 16px;margin:0 0 16px 0;border-radius:0 8px 8px 0">
+        <p style="font-weight:700;color:var(--success);margin:0 0 8px 0;font-size:14px">第三步：部署日志服务（在 OBS 直播间电脑上做）</p>
+
+        <p style="font-weight:600;color:var(--text);margin:12px 0 4px 0">📂 复制文件到这台电脑：</p>
+        <p style="font-size:12px;color:var(--dim);margin:0 0 8px 0">
+          把第一步准备好的两个文件（obs-log-service.js 和 install-obs-log-service.bat）<br>
+          放到这台电脑的<b>桌面</b>上。放在哪里都行，桌面最方便。
+        </p>
+
+        <p style="font-weight:600;color:var(--text);margin:16px 0 4px 0">🚀 双击运行安装脚本：</p>
+        <ol style="padding-left:20px;margin:4px 0 12px;font-size:12px;line-height:2">
+          <li>在桌面上找到 <code>install-obs-log-service.bat</code>（齿轮图标）</li>
+          <li><b>双击</b>打开它</li>
+          <li>会弹出一个黑色窗口，自动执行以下操作（不需要你动手）：</li>
+        </ol>
+        <div style="background:#1a1a2e;border:1px solid var(--border);border-radius:6px;padding:12px 16px;margin:8px 0 14px;font-family:Consolas,monospace;font-size:11px;color:#a0d8a0;line-height:1.9">
+          [1/5] 检测 Node.js ...................... ✓ 找到<br>
+          [2/5] 配置防火墙（开放端口 8393）....... ✓ 已添加<br>
+          [3/5] 安装服务文件到 C:\Users\...\obs-log-service\ ... ✓ 完成<br>
+          [4/5] 创建开机自启 ..................... ✓ 已创建<br>
+          [5/5] 启动服务 ......................... ✓ 服务已启动<br>
+        </div>
+        <p style="font-size:12px;color:var(--dim);margin:0 0 4px 0">
+          看到「✓ 部署完成！」就说明成功了。如果提示「未找到 Node.js」，说明第二步没装好，<br>
+          回到第二步下载安装 Node.js，安装完后再双击一次 .bat。
+        </p>
+        <p style="font-size:11px;color:var(--mute);margin:8px 0 0 0;padding:4px 8px;background:rgba(255,255,255,.03);border-radius:4px">
+          📍 服务安装在哪里？→ 自动安装到 <code style="color:var(--accent)">C:\Users\你的用户名\AppData\Roaming\obs-log-service\</code><br>
+          🔄 开机会自动启动吗？→ 会，已添加到 Windows 启动文件夹<br>
+          🗑 桌面上的两个文件可以删吗？→ 可以，安装完成后就可以删掉
+        </p>
+      </div>
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- 第四步：验证 -->
+      <!-- ══════════════════════════════════════ -->
+      <div style="background:rgba(156,39,176,.06);border-left:3px solid #9c27b0;padding:12px 16px;margin:0 0 16px 0;border-radius:0 8px 8px 0">
+        <p style="font-weight:700;color:#9c27b0;margin:0 0 8px 0;font-size:14px">第四步：验证部署是否成功（可选，确认一切正常）</p>
+        
+        <p style="font-size:12px;color:var(--dim);margin:0 0 8px 0">
+          在 OBS 直播间电脑上，按键盘 <b>Win + R</b>，输入 <code>cmd</code> 回车，打开黑色命令行窗口，输入：
+        </p>
+        <div style="background:#1a1a2e;border:1px solid var(--border);border-radius:6px;padding:8px 14px;margin:8px 0;font-family:Consolas,monospace;font-size:13px;color:#e0e0e0">
+          curl http://127.0.0.1:8393/status
+        </div>
+        <p style="font-size:12px;color:var(--dim);margin:0">
+          如果看到 <code style="color:var(--success)">{"ok":true,"host":"你的电脑名",...}</code> 就说明一切正常！
+        </p>
+        <p style="font-size:11px;color:var(--mute);margin:8px 0 0 0">
+          💡 这一步不是必须的。你也可以直接回到监控大盘，点一下对应主机的 OBS 日志按钮，能加载出来就说明部署成功了。
+        </p>
+      </div>
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- OBS 主机完整前提条件 -->
+      <!-- ══════════════════════════════════════ -->
+      <div style="background:rgba(244,67,54,.06);border-left:3px solid var(--red);padding:12px 16px;margin:0 0 12px 0;border-radius:0 8px 8px 0">
+        <p style="font-weight:700;color:var(--red);margin:0 0 8px 0;font-size:14px">📋 完整清单：OBS 直播间电脑需要具备什么？</p>
+        <table style="width:100%;font-size:12px;line-height:1.8;border-collapse:collapse">
+          <tr style="border-bottom:1px solid rgba(255,255,255,.06)">
+            <td style="padding:4px 8px 4px 0;white-space:nowrap;color:var(--dim)">① OBS 直播软件</td>
+            <td style="padding:4px 0;color:var(--text)">已安装并至少运行过一次（这样才会有日志文件）</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.06)">
+            <td style="padding:4px 8px 4px 0;white-space:nowrap;color:var(--dim)">② OBS WebSocket</td>
+            <td style="padding:4px 0;color:var(--text)">在 OBS → 工具 → WebSocket 服务器设置 → 开启端口 <b>4455</b></td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.06)">
+            <td style="padding:4px 8px 4px 0;white-space:nowrap;color:var(--dim)">③ Node.js</td>
+            <td style="padding:4px 0;color:var(--text)">已安装（<b>在这台 OBS 电脑上</b>，不是监控大盘电脑）<br>👉 <a href="https://nodejs.org/" target="_blank" style="color:var(--accent)">https://nodejs.org/</a> 下载 LTS 版本</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.06)">
+            <td style="padding:4px 8px 4px 0;white-space:nowrap;color:var(--dim)">④ 防火墙</td>
+            <td style="padding:4px 0;color:var(--text)">端口 <b>4455</b> 和 <b>8393</b> 允许入站（安装脚本自动处理 8393）</td>
+          </tr>
+          <tr>
+            <td style="padding:4px 8px 4px 0;white-space:nowrap;color:var(--dim)">⑤ 网络</td>
+            <td style="padding:4px 0;color:var(--text)">与监控大盘在同一局域网（同一个路由器下），或通过 VPN 互通</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- ══════════════════════════════════════ -->
+      <!-- Q&A -->
+      <!-- ══════════════════════════════════════ -->
+      <p style="font-weight:700;color:var(--orange);margin:16px 0 8px 0;font-size:14px">❓ 常见问题：</p>
+      <div style="font-size:11px;color:var(--dim);line-height:1.6">
+        <p style="margin:0 0 8px 0"><b style="color:var(--text)">Q: 这个服务会占用很多电脑资源吗？</b><br>
+        A: 不会。它只是一个极轻量的小程序，平时几乎不占 CPU 和内存，完全不影响 OBS 直播。</p>
+
+        <p style="margin:0 0 8px 0"><b style="color:var(--text)">Q: 会影响 OBS 直播推流吗？</b><br>
+        A: 完全不会。日志服务只读日志文件，跟 OBS 推流没有关系。</p>
+
+        <p style="margin:0 0 8px 0"><b style="color:var(--text)">Q: 万一 OBS 日志路径不是默认的怎么办？</b><br>
+        A: 程序会自动查找常见的 OBS 日志位置（标准安装、便携版等），通常不需要手动配置。</p>
+
+        <p style="margin:0 0 8px 0"><b style="color:var(--text)">Q: 监控大盘显示"无法连接"怎么办？</b><br>
+        A: 检查：① OBS 电脑是否开机 ② Node.js 是否已安装 ③ 防火墙是否开放了 8393 端口<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;④ 重新双击一次 .bat 确认服务在运行</p>
+
+        <p style="margin:0"><b style="color:var(--text)">Q: 如何卸载？</b><br>
+        A: 删除 <code>C:\Users\你的用户名\AppData\Roaming\obs-log-service\</code> 文件夹，<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;然后从启动文件夹删除 obs-log-service.vbs 快捷方式即可。</p>
+      </div>
+
+      <p style="font-size:11px;color:var(--mute);margin:16px 0 0 0;border-top:1px solid var(--border);padding-top:12px">
+        🎉 全部完成后，回到监控大盘点击对应主机的「OBS 日志」按钮，就能看到日志文件列表（含名称/大小/时间），选择任意文件查看。
+      </p>
+    </div>
+    <div class="olm-status">
+      <button onclick="closeDeployHelp()" style="margin-left:auto;font-size:12px;padding:4px 14px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--dim);cursor:pointer">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 数据统计分析浮层 ═══ -->
+<div class="obslog-modal-overlay" id="statsModalOverlay" style="display:none" onclick="if(event.target===this)closeStatsModal()">
+  <div class="obslog-modal" style="max-width:1400px;width:96vw;height:92vh">
+    <div class="olm-hd" style="background:rgba(64,128,255,.08)">
+      <span>📊 直播间数据统计</span>
+      <span class="olm-title" id="statsModalTitle" style="font-size:11px;font-weight:400;color:var(--dim)">— 选择时间范围查看分析</span>
+      <button class="olm-close" onclick="closeStatsModal()" title="关闭 (Esc)">✕</button>
+    </div>
+    <div class="olm-toolbar">
+      <select id="statsRangeSel" onchange="statsOnRangeChange()">
+        <option value="week">最近 1 周</option>
+        <option value="month">最近 1 个月</option>
+        <option value="quarter">最近 3 个月</option>
+        <option value="halfyear">最近 6 个月</option>
+        <option value="year">最近 1 年</option>
+        <option value="custom">自定义范围</option>
+      </select>
+      <span id="statsCustomRange" style="display:none;gap:6px;align-items:center">
+        <input type="date" id="statsDateFrom" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">
+        <span style="color:var(--dim);font-size:12px">至</span>
+        <input type="date" id="statsDateTo" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">
+      </span>
+      <select id="statsRoomFilter" onchange="statsRender()"><option value="">全部房间</option></select>
+      <button onclick="statsRender()">🔄 刷新</button>
+      <button onclick="statsExportCSV()" class="primary">💾 导出 CSV</button>
+      <button onclick="statsClearData()" class="warn" title="清除所有历史统计数据">🗑 清除数据</button>
+      <span id="statsStatus" style="font-size:10px;color:var(--mute);margin-left:auto"></span>
+    </div>
+    <div class="stats-body" id="statsBody">
+      <!-- 概览卡片 -->
+      <div class="stats-overview" id="statsOverview"></div>
+      <!-- 数据表格 -->
+      <div class="stats-table-wrap">
+        <table class="stats-table" id="statsTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="olm-status">
+      <span id="statsDataInfo">数据采样间隔：60 秒 | 保留时长：12 个月</span>
     </div>
   </div>
 </div>
@@ -866,6 +1319,7 @@ class RoomManager {
   connect(room) {
     const c = new OBSConnection(room, (s) => {
       s._room = room; this.states.set(room.id, s); updateAllCards(); updateSummary();
+      refreshRemotePanelIfActive(room.id);
     });
     this.connections.set(room.id, c); c.connect();
   }
@@ -899,6 +1353,7 @@ class OBSConnection {
     this.requestId = 0; this.pendingRequests = new Map(); this.state = this._initState();
     this._outputs = []; // OBS v5 output list cache
     this._audioInputs = []; // OBS audio input names cache
+    this._audioInputKinds = {}; // OBS audio input name → inputKind map (用于设备选择器)
     this._profMap = {}; // OBS v5 GetProfileParameter requestId → {parameterCategory, parameterName} map
     // 时序计算用
     this._lb = undefined; this._lt = undefined;
@@ -911,12 +1366,18 @@ class OBSConnection {
       videoEncoder: '--', gop: '--', avgRenderTime: '--',
       rateControl: '--', preset: '--', tune: '--', encoderProfile: '--', bFrames: '--',
       _rawPresetNvenc: null, _rawPresetX264: null, _rawEncoderId: null, // 原始编码预设值 + 原始编码器ID
+      _rawRateCtrl: null, _rawTune: null, _rawMultipass: null, _rawProfile: null,
+      _rawLookahead: null, _rawPsychoAq: null, _rawBf: null, _rawCustomOpts: null,
       cpu: '--', memory: '--', disk: '--',
       // 录制 / 虚拟摄像机
       recording: false, recordingTime: 0, virtualCam: false,
       // 麦克风
       micName: '--', micVolumeDb: '--', micMuted: false, micLevelPeak: 0, micLevelDbPeak: -100,
       audioInputs: [], selectedAudioInput: '--',
+      allInputs: [], // ★ 全部输入源（供滤镜/源管理下拉框使用）
+      allAudioVolumes: {}, // ★ v1.3.8.0 所有音频输入的电平数据 { inputName: { peakMul, peakDb } }
+      allAudioVolumesPoll: {}, // ★ v1.3.8.0 轮询得到的音量+静音 { volumes:{inputName:{mul,db}}, mutes:{inputName:bool}, ts }
+      audioInputKinds: {}, // ★ v1.3.8.2 inputName → inputKind 映射（无下划线，兼容响应式代理）
       // 网络
       droppedFrames: 0, outputTotalFrames: 0, dropRate: '--',
       renderSkippedFrames: 0, renderTotalFrames: 0, renderDropRate: '--',
@@ -924,7 +1385,7 @@ class OBSConnection {
       // 音频
       audioEncoder: '--', audioBitrate: '--', audioSampleRate: '--', audioChannels: '--',
       // 场景
-      scene: '--',
+      scene: '--', scenes: [],
       // 地址
       pushUrl: '--', pullUrl: '--', workingPullUrl: null, pullSource: 'none', pullCandidates: [],
       alerts: []
@@ -976,16 +1437,34 @@ class OBSConnection {
     if (d.eventType === 'VirtualcamStateChanged') {
       this.state.virtualCam = d.eventData.outputActive; this._emit();
     }
+    if (d.eventType === 'CurrentProgramSceneChanged') {
+      this.state.scene = d.eventData.sceneName || '--'; this._emit();
+    }
+    if (d.eventType === 'SceneListChanged') {
+      // 场景列表变化 — 主动刷新列表
+      var self = this;
+      var rid = 'sc' + (++this.requestId);
+      var req = { op: 6, d: { requestType: 'GetSceneList', requestId: rid } };
+      this._send(req);
+      this.pendingRequests.set(rid, function(r) {
+        if (r.requestStatus && r.requestStatus.code === 100 && r.responseData) {
+          if (r.responseData.currentProgramSceneName) self.state.scene = r.responseData.currentProgramSceneName;
+          if (r.responseData.scenes) self.state.scenes = r.responseData.scenes;
+          self._emit();
+        }
+      });
+    }
     if (d.eventType === 'InputVolumeMeters') {
       this._lastObsMeterTs = Date.now();
       var inputs = d.eventData.inputs || [];
       var target = this.state.selectedAudioInput || this.state.micName;
+      var allVolumes = {}; // ★ v1.3.8.0: 收集所有输入音量
       // 诊断：首批事件打印可用输入
       if (inputs.length > 0 && this._evtCount['InputVolumeMeters'] <= 3) {
         console.log('[OBS METER] 可用输入:', inputs.map(function(inp){return inp.inputName;}).join(', '), '| 当前选中:', target);
       }
       for (var mi = 0; mi < inputs.length; mi++) {
-        if (inputs[mi].inputName !== target) continue;
+        var inpName = inputs[mi].inputName;
         var levels = inputs[mi].inputLevelsMul || [];
         var peakMul = 0;
         if (levels.length > 0) {
@@ -998,7 +1477,6 @@ class OBSConnection {
             }
           }
         }
-        this.state.micLevelPeak = peakMul;
         var dbs = inputs[mi].inputLevelsDb || [];
         var peakDb = -100;
         if (dbs.length > 0) {
@@ -1011,13 +1489,16 @@ class OBSConnection {
             }
           }
         }
-        this.state.micLevelDbPeak = peakDb;
-        this.state.micName = target;
-        this._updateMicMeter();
-        return; // 匹配到就退出
+        allVolumes[inpName] = { peakMul: peakMul, peakDb: peakDb }; // ★ 存所有
+        if (inpName === target) {
+          this.state.micLevelPeak = peakMul;
+          this.state.micLevelDbPeak = peakDb;
+          this.state.micName = target;
+          this._updateMicMeter();
+        }
       }
-      // 没匹配到选中设备，清零
-      this.state.micLevelPeak = 0; this.state.micLevelDbPeak = -100; this._updateMicMeter();
+      this.state.allAudioVolumes = allVolumes; // ★ v1.3.8.0
+      // 如果没匹配到选中设备，保留上次值（可能是源间切换中）
     }
     if (d.eventType === 'SceneChanged') { this.state.scene = d.eventData.sceneName || '--'; this._emit(); }
   }
@@ -1033,6 +1514,11 @@ class OBSConnection {
     this.state.recording = false; this.state.virtualCam = false;
     this.state.micName = '--'; this.state.micVolumeDb = '--'; this.state.micMuted = false; this.state.micLevelPeak = 0; this.state.micLevelDbPeak = -100;
     this.state.audioInputs = []; this.state.selectedAudioInput = '--';
+    this.state.allInputs = [];
+    this.state.sceneItems = []; // ★ v1.3.9.2 GetSceneItemList 当前场景的源项列表
+    this.state.allAudioVolumes = {};
+    this.state.allAudioVolumesPoll = {};
+    this.state.audioInputKinds = {};
     this._emit(); this._scheduleReconnect();
   }
   _scheduleReconnect() {
@@ -1048,6 +1534,7 @@ class OBSConnection {
     // 重置原始编码预设值（每轮重新采集）
     this.state._rawPresetNvenc = null;
     this.state._rawPresetX264 = null;
+    // 注意：_rawRateCtrl/_rawTune/_rawMultipass 等不重置，保留上次 P4 读取值，避免闪烁
     var bid = 'b' + this.room.id + '_' + (++this.requestId);
     var requests = [
       { requestId: bid + '_1', requestType: 'GetStreamStatus' },
@@ -1058,6 +1545,8 @@ class OBSConnection {
       { requestId: bid + '_5r', requestType: 'GetRecordStatus' },
       { requestId: bid + '_5v', requestType: 'GetVirtualCamStatus' },
       { requestId: bid + '_5i', requestType: 'GetInputList' },
+      // ★ v1.3.9.2: 获取当前场景源项（用于删除源）
+      { requestId: bid + '_5s', requestType: 'GetSceneItemList', requestData: { sceneName: this.state.scene || '--' } },
       { requestId: bid + '_6', requestType: 'GetOutputList' },
       // Advanced 模式：从 Profile 读取编码器参数
       { requestId: bid + '_7', requestType: 'GetProfileParameter', requestData: { parameterCategory: 'AdvOut', parameterName: 'Encoder' } },
@@ -1117,8 +1606,8 @@ class OBSConnection {
           outReqs.push({ requestId: bid2 + '_' + k, requestType: 'GetOutputSettings', requestData: { outputName: oname } });
         }
       }
-      // 确保 adv_stream 也在查询列表中（Advanced 模式推流输出）
-      if (!seenNames['adv_stream']) {
+      // 确保 adv_stream 也在查询列表中（Advanced 模式推流输出，仅推流中查询）
+      if (!seenNames['adv_stream'] && this.state.streaming) {
         outReqs.push({ requestId: bid2 + '_adv', requestType: 'GetOutputSettings', requestData: { outputName: 'adv_stream' } });
       }
       // advanced_video_stream 是编码器配置 section 名，不是 output 名，已移除
@@ -1137,21 +1626,35 @@ class OBSConnection {
       }
     }
 
-    // Phase 2.5: 查询选中音频输入音量（兜底数据源）
-    var selAudio = this.state.selectedAudioInput;
-    if (selAudio && selAudio !== '--') {
-      var bid25 = 'b' + this.room.id + '_a_' + (++this.requestId);
-      var aReqs = [{ requestId: bid25, requestType: 'GetInputVolume', requestData: { inputName: selAudio }, _pollMic: true }];
+    // ★ v1.3.8.0 Phase 2.5: 查询所有音频输入的音量+静音状态（供混音器面板）
+    var allAudios = this.state.audioInputs || [];
+    if (allAudios.length > 0) {
+      var bid25 = 'b' + this.room.id + '_av_' + (++this.requestId);
+      var aReqs = [];
+      for (var ai = 0; ai < allAudios.length; ai++) {
+        aReqs.push({ requestId: bid25 + '_v' + ai, requestType: 'GetInputVolume', requestData: { inputName: allAudios[ai] } });
+        aReqs.push({ requestId: bid25 + '_m' + ai, requestType: 'GetInputMute', requestData: { inputName: allAudios[ai] } });
+      }
       var batch25 = { op: 8, d: { requestId: bid25, haltOnFailure: false, requests: aReqs } };
       var p25 = new Promise(function(rv25) {
         var t25 = setTimeout(function() { rv25(null); }, 3000);
         self.pendingRequests.set(bid25, function(d) { clearTimeout(t25); rv25(d); });
-        self.pendingRequests.set(bid25, function() {});
       });
       try { this._send(batch25); } catch(e) {}
       var result25 = await p25;
       if (result25 && result25.results) {
-        for (var an = 0; an < result25.results.length; an++) this._parse(result25.results[an]);
+        // ★ v1.3.8.0 构建音量+静音映射
+        var volMap = {}, muteMap = {};
+        for (var rn = 0; rn < result25.results.length; rn++) {
+          var rd = result25.results[rn];
+          if (rd.requestType === 'GetInputVolume') {
+            volMap[rd.requestData ? rd.requestData.inputName : ''] = { mul: rd.responseData ? rd.responseData.inputVolumeMul : undefined, db: rd.responseData ? rd.responseData.inputVolumeDb : undefined };
+          }
+          if (rd.requestType === 'GetInputMute') {
+            muteMap[rd.requestData ? rd.requestData.inputName : ''] = rd.responseData ? rd.responseData.inputMuted : false;
+          }
+        }
+        if (Object.keys(volMap).length > 0) this.state.allAudioVolumesPoll = { volumes: volMap, mutes: muteMap, ts: Date.now() };
       }
     }
 
@@ -1220,9 +1723,11 @@ class OBSConnection {
     // OBS Advanced 模式把编码器参数（rate_control, bitrate, preset 等）存储在
     // streamEncoder.json 等 JSON 文件中，GetProfileParameter 无法访问这些文件。
     // start-dashboard.js (localhost:8392) 内置读取 OBS 编码器配置文件，提供 HTTP API。
-    if (this.state.rateControl === '--' && rawEncId && rawEncId !== '--') {
+    if ((this.state.rateControl === '--' || this.state.gop === '--' || /^\d+s/.test(this.state.gop)) && rawEncId && rawEncId !== '--') {
       // 初始化重试计数器（persist across polls）
       if (typeof this._p4Retries === 'undefined') this._p4Retries = 0;
+      // gop 是默认值时（如 '2s'），重置计数器允许重新从 helper 读取
+      if (/^\d+s/.test(this.state.gop) && this._p4Retries > 0) this._p4Retries = 0;
       if (this._p4Retries < 5) {
         if (!this._p4DidLog || this._p4Retries <= 1) {
           if (typeof _diag !== 'undefined') _diag('rateCtrl-P4', 'try #' + (this._p4Retries + 1) + ' http://127.0.0.1:8392');
@@ -1235,6 +1740,10 @@ class OBSConnection {
             if (typeof _diag !== 'undefined') _diag('rateCtrl-P4-ok', 'got ' + Object.keys(encData).join(','));
             var encCfg = encData.streamEncoder || encData.recordEncoder || encData[Object.keys(encData)[0]];
             if (encCfg) {
+              // ★ 轮询日志：Phase 4 JSON 文件读取
+              if (_rmRoomId === this.room.id) {
+                _rmLog('POLL-P4: JSON文件读取 bf=' + (encCfg.bf!==undefined?encCfg.bf:'?') + ' customOpts=' + (encCfg.opts||encCfg.custom_encoder_options||'?') + ' preset=' + (encCfg.preset||'?') + ' rateCtrl=' + (encCfg.rate_control||'?'));
+              }
               if (encCfg.rate_control !== undefined && this.state.rateControl === '--') {
                 this.state.rateControl = prettyRateControl(encCfg.rate_control);
                 if (typeof _diag !== 'undefined') _diag('rateCtrl-P4', 'rate_control=' + encCfg.rate_control + ' → ' + this.state.rateControl);
@@ -1242,11 +1751,39 @@ class OBSConnection {
               if (encCfg.bitrate !== undefined && this.state.bitrate === '--') {
                 this.state.bitrate = encCfg.bitrate + ' Kbps';
               }
+              if (encCfg.keyint_sec !== undefined && (this.state.gop === '--' || /^\d+s/.test(this.state.gop))) {
+                var _pfps = parseInt(this.state.fps) || parseInt(this.state.fpsSet) || 30;
+                this.state.gop = encCfg.keyint_sec + 's (' + (encCfg.keyint_sec * _pfps) + '帧)';
+              }
               if (encCfg.preset !== undefined) {
                 if (encFam === 'nvenc' || encFam === 'nvenc_hevc') {
                   if (!this.state._rawPresetNvenc) this.state._rawPresetNvenc = String(encCfg.preset);
                 } else if (encFam === 'x264') {
                   if (!this.state._rawPresetX264) this.state._rawPresetX264 = String(encCfg.preset);
+                }
+              }
+              // ★ 保存所有编码器原始值，供面板填充使用
+              if (encCfg.tune !== undefined) this.state._rawTune = String(encCfg.tune);
+              if (encCfg.multipass !== undefined) this.state._rawMultipass = String(encCfg.multipass);
+              if (encCfg.profile !== undefined) this.state._rawProfile = String(encCfg.profile);
+              if (encCfg.lookahead !== undefined) this.state._rawLookahead = !!encCfg.lookahead;
+              // ★ 同时尝试 psycho_aq 和 adaptive_quantization 字段
+              if (encCfg.psycho_aq !== undefined) this.state._rawPsychoAq = !!encCfg.psycho_aq;
+              else if (encCfg.adaptive_quantization !== undefined) this.state._rawPsychoAq = !!encCfg.adaptive_quantization;
+              if (encCfg.bf !== undefined) this.state._rawBf = parseInt(encCfg.bf);
+              if (encCfg.rate_control !== undefined) this.state._rawRateCtrl = String(encCfg.rate_control);
+              // custom_encoder_options 或 opts：自定义选项字段
+              // ★ 优先读取 opts（新版 NVENC），fallback 到 custom_encoder_options（兼容旧版）
+              if (encCfg.opts !== undefined) this.state._rawCustomOpts = String(encCfg.opts);
+              else if (encCfg.custom_encoder_options !== undefined) this.state._rawCustomOpts = String(encCfg.custom_encoder_options);
+              // 自动纠正拼写错误（slced_threads → slic ed_threads）
+              if (this.state._rawCustomOpts) this.state._rawCustomOpts = this.state._rawCustomOpts.replace(/slced_threads/g, 'sliced_threads');
+              // ★ Phase 4 异步完成后，如果面板开着且用户未在编辑，回填编码器参数和混音器
+              if (_rmParamsLoaded && _rmRoomId === this.room.id && !_rmEditingParams) {
+                var _panel = document.getElementById('rmPanel');
+                if (_panel && _panel.classList.contains('show')) {
+                  _rmRefillEncoderParams(this.state);
+                  _rmRefillMixer(this.state);
                 }
               }
             }
@@ -1361,6 +1898,7 @@ class OBSConnection {
       }
       case 'GetSceneList': {
         if (d.currentProgramSceneName) this.state.scene = d.currentProgramSceneName;
+        if (d.scenes) this.state.scenes = d.scenes;
         break;
       }
       case 'GetStreamServiceSettings': {
@@ -1384,10 +1922,14 @@ class OBSConnection {
       case 'GetInputList': {
         var inputs = d.inputs || [];
         var audioInputs = [];
+        var allInputs = []; // ★ 全部输入源（供远程控制面板滤镜/源管理使用）
+        var akinds = {}; // ★ v1.3.8.0 inputName → inputKind
         var firstMicName = '--';
         for (var ii = 0; ii < inputs.length; ii++) {
           var ik = (inputs[ii].inputKind || '').toLowerCase();
           var iname = inputs[ii].inputName || '';
+          allInputs.push(iname);
+          akinds[iname] = inputs[ii].inputKind || '';
           // 匹配所有音频类设备：麦克风、桌面音频、辅助音频等
           if (ik.indexOf('audio') >= 0 || ik.indexOf('mic') >= 0 || ik.indexOf('aux') >= 0 || ik.indexOf('wasapi') >= 0) {
             audioInputs.push(iname);
@@ -1395,7 +1937,11 @@ class OBSConnection {
           }
         }
         this._audioInputs = audioInputs;
+        this._audioInputKinds = akinds; // ★ v1.3.8.0
+        console.log('[混音器] 音频输入 kinds:', JSON.stringify(akinds));
         this.state.audioInputs = audioInputs;
+        this.state.allInputs = allInputs; // ★ 保存全部输入
+        this.state.audioInputKinds = akinds; // ★ v1.3.8.2
         // 用户没选过 或 之前选的设备已不在列表中 → 默认第一个
         if (this.state.selectedAudioInput === '--' || audioInputs.indexOf(this.state.selectedAudioInput) < 0) {
           this.state.selectedAudioInput = firstMicName;
@@ -1404,6 +1950,20 @@ class OBSConnection {
         } else {
           _diag('AUDIO-KEEP', '保持选中="' + this.state.selectedAudioInput + '" (列表:' + audioInputs.join(',') + ')');
         }
+        break;
+      }
+      // ★ v1.3.9.2 场景源项列表
+      case 'GetSceneItemList': {
+        var items = d.sceneItems || [];
+        var sitems = [];
+        for (var sii = 0; sii < items.length; sii++) {
+          sitems.push({
+            sourceName: items[sii].sourceName || '',
+            sceneItemId: items[sii].sceneItemId,
+            inputKind: items[sii].inputKind || ''
+          });
+        }
+        this.state.sceneItems = sitems;
         break;
       }
       case 'GetInputVolume': {
@@ -1521,6 +2081,10 @@ class OBSConnection {
           // Advanced mode: 从 encoderSettings 提取所有编码器参数
           if (os.encoderSettings) {
             var es = os.encoderSettings;
+            // ★ 轮询日志：编码器参数回读
+            if (_rmRoomId === this.room.id) {
+              _rmLog('POLL: encoderSettings回读 rate_control=' + (es.rate_control||es.rateControl||'?') + ' preset=' + (es.preset||'?') + ' bf=' + (es.bf!==undefined?es.bf:'?') + ' tune=' + (es.tune||'?') + ' keyint=' + (es.keyint_sec!==undefined?es.keyint_sec:'?'));
+            }
             // DEBUG: dump all encoderSettings keys
             console.log('[OBS DIAG] Advanced encoderSettings keys:', Object.keys(es).join(','));
             console.log('[OBS DIAG] Advanced encoderSettings RAW:', JSON.stringify(es).substring(0, 800));
@@ -2011,17 +2575,10 @@ function updateAllCards() {
     var st = roomManager.getState(room.id);
     if (!st._room) st._room = room;
     var oldCard = existing[room.id];
-    var videoEl = document.getElementById('v-' + room.id);
-    var isPlaying = videoEl && videoEl._flv && !videoEl.paused;
 
-    if (isPlaying) {
-      if (oldCard) {
-        updateCardVisuals(oldCard, room, st);
-      } else {
-        grid.appendChild(createCard(room, st));
-      }
+    if (oldCard) {
+      updateCardVisuals(oldCard, room, st);
     } else {
-      if (oldCard) oldCard.remove();
       grid.appendChild(createCard(room, st));
     }
   }
@@ -2143,6 +2700,8 @@ function createCard(room, st) {
         '<input type="range" class="vol-slider" id="vs-' + room.id + '" min="0" max="100" value="100" oninput="setVolume(' + room.id + ',this.value)" />' +
       '</div>' +
     '</div>' +
+    '<div class="params-toggle" id="pt-' + room.id + '" onclick="toggleCardParams(' + room.id + ')">📊 展开参数 ▼</div>' +
+    '<div class="params-collapsible collapsed" id="pc-' + room.id + '">' +
     // ── 模块行 ──
     (function(){
       var fpsVal = (st.fpsSet ? st.fps + '/' + st.fpsSet : (st.fps || '--'));
@@ -2161,7 +2720,7 @@ function createCard(room, st) {
       return '<div class="params-section">' +
         // R1: 视频参数
         '<div class="module-row"><div class="m-head"><span class="m-icon">📹</span><span class="m-title">视频参数</span></div><div class="m-grid">' +
-          _mi('分辨率', st.resolution) + _mi('帧率', fpsVal, fpsCls) + _mi('视频码率', st.bitrate) + _mi('编码器', st.videoEncoder || '--') +
+          _mi('分辨率', st.resolution) + _mi('帧率', fpsVal, fpsCls) + _mi('比特率', st.bitrate) + _mi('编码器', st.videoEncoder || '--') +
           _mi('GOP', st.gop || '--') + _mi('渲染', st.avgRenderTime) + _encParams() +
         '</div></div>' +
         // R2: 音频参数
@@ -2212,10 +2771,13 @@ function createCard(room, st) {
         '<div class="url-item"><span class="ul">📡 拉流地址</span><span class="uv ' + pullClass + '" id="pull-' + room.id + '" title="' + e(st.pullUrl) + '">' + e(st.pullUrl || '--') + (isPullManual ? ' [手动]' : (hasPull ? ' [自动]' : '')) + '</span>' + (hasPull ? '<button class="copy-btn" onclick="copyText(\'' + e(st.pullUrl) + '\')">复制</button>' : '') + '</div>' +
       '</div>';
     })() +
+    '</div>' +
     '<div class="card-footer">' +
       '<span class="fi">' + e(room.host) + ':' + room.port + '</span>' +
       (st.streaming && st.streamTime > 0 ? '<span class="ft">推流 ' + fmtDur(st.streamTime) + '</span>' : '') +
       (st.recording && st.recordingTime > 0 ? '<span class="ft">录制 ' + fmtDur(st.recordingTime) + '</span>' : '') +
+      '<span class="room-log-link" onclick="openObsLogModal(\'' + e(room.host) + '\', \'' + e(room.name) + '\');event.stopPropagation()" title="查看 OBS 日志">📋 OBS日志</span>' +
+    '</div>' +
     '</div>';
   return card;
 }
@@ -2231,6 +2793,21 @@ function _md(label, cls, val) {
 // 保留旧函数供其他调用
 function _pi(label, value, cls) {
   return '<div class="param-item"><span class="pl">' + label + '</span><span class="pv' + (cls ? ' ' + cls : '') + '">' + (value || '--') + '</span></div>';
+}
+
+// 折叠/展开卡片参数区域
+function toggleCardParams(id) {
+  var wrap = document.getElementById('pc-' + id);
+  var btn = document.getElementById('pt-' + id);
+  if (!wrap || !btn) return;
+  var isCollapsed = wrap.classList.contains('collapsed');
+  if (isCollapsed) {
+    wrap.classList.remove('collapsed');
+    btn.innerHTML = '📊 收起参数 ▲';
+  } else {
+    wrap.classList.add('collapsed');
+    btn.innerHTML = '📊 展开参数 ▼';
+  }
 }
 
 var _toggleDebounce = {};
@@ -2591,11 +3168,116 @@ function reconnectRoom(id) { roomManager.disconnect(id); const r = roomManager.g
 var _rmRoomId = null;
 var _rmLockTimer = null;
 var _rmToastTimer = null;
+var _rmParamsLoaded = false;
+var _rmDebugLogs = [];
+var _rmEditingParams = false; // 用户正在编辑面板参数，暂停轮询回填
+var _rmFieldDirty = {};       // 按字段 dirty 标记：{ customOpts: true, rateCtrl: true, ... }
+
+// 标记用户正在编辑编码器参数（输入框获得焦点 / select改变）
+function markEditing(field) {
+  _rmEditingParams = true;
+  if (field) _rmFieldDirty[field] = true;
+  _rmLog('EDITTING: 用户开始编辑参数, field=' + (field || 'unknown') + ' dirty=' + JSON.stringify(_rmFieldDirty));
+}
+// 标记编辑结束（保存后调用，或面板关闭时）
+function clearEditing() {
+  if (_rmEditingParams) _rmLog('EDITTING: 编辑标记已清除，恢复轮询同步');
+  _rmEditingParams = false;
+  _rmFieldDirty = {};
+}
+
+// ═══════════════════════════════════════════════
+// 编码器UI动态切换 — 根据编码器类型显示对应参数
+// ═══════════════════════════════════════════════
+function switchEncoderUI() {
+  var encEl = document.getElementById('rmEncSel');
+  var enc = encEl ? encEl.value : '';
+  var isNvenc = (enc.indexOf('NVENC') >= 0);
+  var isX264 = (enc.indexOf('x264') >= 0);
+  _rmLog('switchEncoderUI: enc=' + enc + ' nvenc=' + isNvenc + ' x264=' + isX264);
+
+  // ── 1. 比特率控制下拉 ──
+  var rcSel = document.getElementById('rmRateCtrl');
+  if (isX264) {
+    rcSel.innerHTML = '<option value="CBR">CBR</option><option value="VBR">VBR</option><option value="ABR">ABR</option><option value="CRF">CRF</option>';
+  } else {
+    rcSel.innerHTML = '<option value="CBR">CBR</option><option value="VBR">VBR</option><option value="CQP">CQP</option>';
+  }
+
+  // ── 2. 预设下拉 ──
+  var prSel = document.getElementById('rmPreset');
+  var prLbl = document.getElementById('rmLblPreset');
+  if (isX264) {
+    prLbl.textContent = 'CPU使用预设';
+    prSel.innerHTML = '<option value="veryfast">veryfast</option><option value="ultrafast">ultrafast</option><option value="superfast">superfast</option><option value="faster">faster</option><option value="fast">fast</option><option value="medium">medium</option><option value="slow">slow</option><option value="slower">slower</option><option value="veryslow">veryslow</option><option value="placebo">placebo</option>';
+  } else {
+    prLbl.textContent = '预设';
+    prSel.innerHTML = '<option value="p5">P5: 慢速（优质）</option><option value="p1">P1: 最快（低质）</option><option value="p2">P2: 快速</option><option value="p3">P3: 中速</option><option value="p4">P4: 中速偏慢</option><option value="p6">P6: 更慢（更优）</option><option value="p7">P7: 最慢（最优）</option>';
+  }
+
+  // ── 3. 调节下拉 ──
+  var tuSel = document.getElementById('rmTune');
+  var tuLbl = document.getElementById('rmLblTune');
+  if (isX264) {
+    tuLbl.textContent = '微调';
+    tuSel.innerHTML = '<option value="">(无)</option><option value="film">film</option><option value="animation">animation</option><option value="grain">grain</option><option value="stillimage">stillimage</option><option value="fastdecode">fastdecode</option><option value="zerolatency">zerolatency</option>';
+  } else {
+    tuLbl.textContent = '调节';
+    tuSel.innerHTML = '<option value="hq">高质量</option><option value="ll">低延迟</option><option value="ull">超低延迟</option>';
+  }
+
+  // ── 4. 多次编码 / 前向参考 / 自适应量化（仅 NVENC） ──
+  document.getElementById('rmRowMultipass').style.display = isNvenc ? '' : 'none';
+  document.getElementById('rmRowLookahead').style.display = isNvenc ? '' : 'none';
+  document.getElementById('rmRowPsychoAq').style.display = isNvenc ? '' : 'none';
+
+  // ── 5. 配置文件下拉 ──
+  var pfSel = document.getElementById('rmProfile');
+  if (isX264) {
+    pfSel.innerHTML = '<option value="">(无)</option><option value="high">high</option><option value="main">main</option><option value="baseline">baseline</option>';
+  } else {
+    pfSel.innerHTML = '<option value="high">high</option><option value="main">main</option><option value="baseline">baseline</option>';
+  }
+
+  // ── 6. 自定义选项标签和占位 ──
+  var coLbl = document.getElementById('rmLblCustomOpts');
+  var coInp = document.getElementById('rmCustomOpts');
+  if (isX264) {
+    coLbl.textContent = 'x264 选项';
+    coInp.placeholder = '如: ref=5 bframes=3 aq-mode=2';
+  } else {
+    coLbl.textContent = '自定义编码器选项';
+    coInp.placeholder = '如: ref=4 bframes=0';
+  }
+
+  // ── 7. 切换后回填编码器对应值 ──
+  var st = (typeof roomManager !== 'undefined' && _rmRoomId) ? roomManager.getState(_rmRoomId) : null;
+  if (st) {
+    // 切换编码器时强制回填（清除 dirty 标记，让新编码器的参数显示出来）
+    _rmFieldDirty['preset'] = false;
+    _rmFieldDirty['tune'] = false;
+    _rmFieldDirty['rateCtrl'] = false;
+    _rmFieldDirty['profile'] = false;
+    _rmFieldDirty['bf'] = false;
+    _rmRefillEncoderParams(st);
+  }
+}
+
+function _rmLog(msg) {
+  var ts = new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
+  var line = '[' + ts + '] ' + msg;
+  _rmDebugLogs.push(line);
+  if (_rmDebugLogs.length > 500) _rmDebugLogs.shift(); // 只保留最近500条
+  console.log(line);
+  // ★ 同步到侧边栏「运行日志」面板
+  _diag('远程', msg);
+}
 
 function showRemoteControl(roomId) {
   var r = roomManager.get(roomId);
   if (!r || !r.remotePassword) { alert('该房间未设置主控密码，请先在编辑中设置'); return; }
   _rmRoomId = roomId;
+  _rmParamsLoaded = false;
   document.getElementById('rmTitle').textContent = '🎮 ' + r.name;
   document.getElementById('rmSub').textContent = r.host + ':' + r.port;
   document.getElementById('rmPwSub').textContent = r.host + ':' + r.port + ' — ' + r.name;
@@ -2631,13 +3313,16 @@ function setRemoteLocked(locked) {
   var dot = document.getElementById('rmLockDot');
   var txt = document.getElementById('rmLockText');
   var btn = document.getElementById('rmLockBtn');
+  var panel = document.getElementById('rmPanel');
   if (locked) {
     dot.className = 'dot locked'; txt.textContent = '已锁定';
     btn.className = 'lock-btn-rm locked'; btn.textContent = '🔒 点击解锁'; btn.onclick = function(){ document.getElementById('rmPwPrompt').style.display = ''; document.getElementById('rmPanel').classList.remove('show'); document.getElementById('rmPwInput').value = ''; document.getElementById('rmPwErr').style.display = 'none'; setTimeout(function(){ document.getElementById('rmPwInput').focus(); }, 100); };
+    if (panel) { panel.style.pointerEvents = 'none'; panel.style.opacity = '0.5'; }
     clearAutoLockTimer();
   } else {
     dot.className = 'dot unlocked'; txt.textContent = '已解锁';
     btn.className = 'lock-btn-rm unlocked'; btn.textContent = '🔓 锁定'; btn.onclick = function(){ setRemoteLocked(true); };
+    if (panel) { panel.style.pointerEvents = ''; panel.style.opacity = ''; }
     startAutoLockTimer();
   }
 }
@@ -2666,6 +3351,8 @@ function verifyRemotePw() {
     setRemoteLocked(false);
     document.getElementById('rmPwErr').style.display = 'none';
     rmToast('✅ 远程控制已解锁');
+    // 初始化编码器UI（根据当前编码器显示对应参数）
+    switchEncoderUI();
   } else {
     document.getElementById('rmPwErr').style.display = '';
     document.getElementById('rmPwInput').value = '';
@@ -2708,46 +3395,1097 @@ function rmToast(msg) {
   _rmToastTimer = setTimeout(function(){ t.classList.remove('show'); }, 1800);
 }
 
+// ═══════════════════════════════════════
+// 远程控制 — OBS WebSocket 命令
+// ═══════════════════════════════════════
+function _rmGetConn() {
+  if (!_rmRoomId) return null;
+  var r = roomManager.get(_rmRoomId);
+  if (!r) return null;
+  return roomManager.connections.get(r.id) || null;
+}
+
+function _rmCheckConn() {
+  var conn = _rmGetConn();
+  if (!conn || !conn.ws || conn.ws.readyState !== WebSocket.OPEN || !conn.identified) {
+    rmToast('⚠ OBS 未连接，无法执行操作');
+    return null;
+  }
+  return conn;
+}
+
+function rmSendCmd(requestType, requestData, label) {
+  var conn = _rmCheckConn();
+  if (!conn) return;
+  var rid = 'rm_' + (++conn.requestId);
+  var req = { op: 6, d: { requestType: requestType, requestId: rid } };
+  if (requestData !== undefined) req.d.requestData = requestData;
+  _rmLog('rmSendCmd ' + requestType + ' ' + JSON.stringify(requestData || {}));
+  conn._send(req);
+  conn.pendingRequests.set(rid, function(d) {
+    if (d.requestStatus && d.requestStatus.code === 100) {
+      var respData = d.responseData;
+      var respStr = respData ? JSON.stringify(respData).slice(0, 300) : '(无数据)';
+      _rmLog('  ← OK: ' + requestType + ' | ' + respStr);
+      if (label) rmToast(label);
+    } else {
+      var err = d.requestStatus ? (d.requestStatus.comment || '错误码 ' + d.requestStatus.code) : '未知错误';
+      _rmLog('  ← FAIL: ' + requestType + ' => ' + err);
+      rmToast('⚠ ' + (label || requestType) + ' 失败: ' + err);
+    }
+  });
+  // 超时清理
+  setTimeout(function() { conn.pendingRequests.delete(rid); }, 5000);
+}
+
+function rmStartStream() { rmSendCmd('StartStream', undefined, '▶ 已开始推流'); }
+function rmStopStream() { rmSendCmd('StopStream', undefined, '■ 已停止推流'); }
+function rmStartRecord() { rmSendCmd('StartRecord', undefined, '● 已开始录制'); }
+function rmStopRecord() { rmSendCmd('StopRecord', undefined, '⏹ 已停止录制'); }
+function rmPauseRecord() { rmSendCmd('PauseRecord', undefined, '⏸ 已暂停录制'); }
+function rmResumeRecord() { rmSendCmd('ResumeRecord', undefined, '▶ 已继续录制'); }
+function rmToggleVirtualCam() {
+  var st = roomManager.getState(_rmRoomId);
+  if (st && st.virtualCam) rmSendCmd('StopVirtualCam', undefined, '📷 虚拟摄像机已关闭');
+  else rmSendCmd('StartVirtualCam', undefined, '📷 虚拟摄像机已开启');
+}
+function rmTriggerReplayBuffer() { rmSendCmd('SaveReplayBuffer', undefined, '📹 回放缓冲区已触发'); }
+function rmSetScene() {
+  var sel = document.getElementById('rmSceneSel');
+  if (!sel || !sel.value) { rmToast('⚠ 请先选择场景'); return; }
+  rmSendCmd('SetCurrentProgramScene', { sceneName: sel.value }, '🎬 已切换到: ' + sel.value);
+}
+function rmSetTransition() {
+  var sel = document.getElementById('rmTransitionSel');
+  if (!sel || !sel.value) { rmToast('⚠ 请先选择转场'); return; }
+  rmSendCmd('SetCurrentSceneTransition', { transitionName: sel.value }, '转场已切换至：' + (sel.options[sel.selectedIndex].text || sel.value));
+}
+
+function _rmLoadTransitions() {
+  var conn = _rmGetConn();
+  if (!conn || !conn.ws) return;
+  var bid = 'rm_trlist_' + Date.now();
+  var req = { op: 6, d: { requestType: 'GetSceneTransitionList', requestId: bid, requestData: {} } };
+  conn.pendingRequests.set(bid, function(d) {
+    var ts = (d.responseData && d.responseData.transitions) || [];
+    var cur = (d.responseData && d.responseData.currentSceneTransitionName) || '';
+    var sel = document.getElementById('rmTransitionSel');
+    if (!sel) return;
+    sel.innerHTML = '';
+    for (var i = 0; i < ts.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = ts[i].transitionName;
+      opt.textContent = ts[i].transitionName;
+      if (ts[i].transitionName === cur) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    if (ts.length === 0) {
+      var opt = document.createElement('option');
+      opt.value = ''; opt.textContent = '无可用转场';
+      sel.appendChild(opt);
+    }
+  });
+  try { conn.ws.send(JSON.stringify(req)); } catch(e) {}
+}
+
+// ═══════════════════════════════════════
+// 调试日志导出
+// ═══════════════════════════════════════
+function rmExportLogs() {
+  if (_rmDebugLogs.length === 0) { rmToast('⚠ 暂无日志'); return; }
+  var text = _rmDebugLogs.join('\n');
+  var blob = new Blob([text], { type: 'text/plain' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'obs-remote-debug-' + new Date().toISOString().slice(0,10) + '.txt';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  rmToast('✅ 日志已导出 (' + _rmDebugLogs.length + ' 条)');
+}
+
+// ═══════════════════════════════════════
+// 远程控制 — 参数保存函数（批量 SetProfileParameter）
+// ═══════════════════════════════════════
+function _rmSetProfileParam(category, name, value) {
+  var conn = _rmCheckConn(); if (!conn) return;
+  var rid = 'rp_' + (++conn.requestId);
+  _rmLog('SetProfileParameter cat=' + category + ' name=' + name + ' val=' + value);
+  var req = { op: 6, d: { requestType: 'SetProfileParameter', requestId: rid, requestData: { parameterCategory: category, parameterName: name, parameterValue: String(value) } } };
+  // 注册回调，获取 OBS 的响应
+  conn.pendingRequests.set(rid, function(d) {
+    if (d.requestStatus && d.requestStatus.result) {
+      _rmLog('  OK: ' + category + '.' + name + ' = ' + value);
+    } else {
+      _rmLog('  FAIL: ' + category + '.' + name + ' = ' + value + ' status=' + JSON.stringify(d.requestStatus));
+    }
+  });
+  conn._send(req);
+  setTimeout(function() { conn.pendingRequests.delete(rid); }, 5000);
+}
+
+var _rmEncHelperUrl = 'http://127.0.0.1:8392';
+
+function rmSaveStreamParams() {
+  _rmLog('=== rmSaveStreamParams (live params) ===');
+  var conn = _rmCheckConn(); if (!conn) return;
+  var svr = document.getElementById('rmStreamSvr').value.trim();
+  var key = document.getElementById('rmStreamKey').value.trim();
+  var vbr = document.getElementById('rmVBitrate').value.trim();
+  var abr = document.getElementById('rmABitrate').value.trim();
+  // 分辨率 / FPS
+  var bw = document.getElementById('rmBaseW').value.trim();
+  var bh = document.getElementById('rmBaseH').value.trim();
+  var ow = document.getElementById('rmOutW').value.trim();
+  var oh = document.getElementById('rmOutH').value.trim();
+  var fps = document.getElementById('rmFpsSel').value;
+  var enc = document.getElementById('rmEncSel').value;
+  var keyint = document.getElementById('rmKeyint').value.trim();
+  // 编码器高级参数
+  var rateCtrl = document.getElementById('rmRateCtrl').value;
+  var preset = document.getElementById('rmPreset').value;
+  var tune = document.getElementById('rmTune').value;
+  var multipass = document.getElementById('rmMultipass').value;
+  var profile = document.getElementById('rmProfile').value;
+  var lookahead = document.getElementById('rmLookahead').checked;
+  var psychoAq = document.getElementById('rmPsychoAq').checked;
+  var bf = document.getElementById('rmBf').value.trim();
+  var customOpts = document.getElementById('rmCustomOpts').value.trim();
+  _rmLog('rmSaveStreamParams: svr=' + svr + ' vbr=' + vbr + ' abr=' + abr + ' keyint=' + keyint + ' res=' + bw + 'x' + bh + ' fps=' + fps + ' enc=' + enc + ' rateCtrl=' + rateCtrl + ' preset=' + preset);
+
+  // 1) 推流地址（WebSocket）
+  if (svr) {
+    rmSendCmd('SetStreamServiceSettings', {
+      streamServiceType: 'rtmp_custom',
+      streamServiceSettings: { server: svr, key: key }
+    }, null);
+  }
+  // 2) 分辨率 + FPS（WebSocket）
+  if (bw && bh) {
+    rmSendCmd('SetVideoSettings', {
+      fpsNumerator: parseInt(fps) || 60, fpsDenominator: 1,
+      baseWidth: parseInt(bw) || 1920, baseHeight: parseInt(bh) || 1080,
+      outputWidth: parseInt(ow) || parseInt(bw) || 1920,
+      outputHeight: parseInt(oh) || parseInt(bh) || 1080
+    }, null);
+  }
+  var st = roomManager.getState(_rmRoomId);
+  var streaming = st && st.streaming;
+  var wsCount = 0;
+
+  // 3) 视频编码器 + 关键帧间隔（WebSocket SetProfileParameter — AdvOut category）
+  if (enc) {
+    var encId = 'obs_nvenc_h264_tex';
+    if (enc.indexOf('HEVC') >= 0) encId = 'obs_nvenc_hevc_tex';
+    else if (enc.indexOf('x264') >= 0) encId = 'obs_x264';
+    _rmSetProfileParam('AdvOut', 'Encoder', encId);
+    wsCount++;
+  }
+  if (keyint) {
+    // ★ NVENC/x264 都从 basic.ini [AdvOut] 节读取关键帧间隔，JSON 只作补充
+    _rmSetProfileParam('AdvOut', 'keyint_sec', keyint);
+    wsCount++;
+  }
+  // 4) 音频码率（WebSocket SetProfileParameter）
+  if (abr) {
+    _rmSetProfileParam('AdvOut', 'Track1Bitrate', abr);
+    wsCount++;
+  }
+
+  // ═══════════════════════════════════════════════
+  // 5) 编码器参数 → HTTP POST 写 JSON 文件（根因修复）
+  // OBS Advanced 模式编码器参数在 streamEncoder.json 中，
+  // SetProfileParameter 写的是 INI 文件，编码器不读取！
+  // 必须通过 helper 直接修改 JSON 文件。
+  // ═══════════════════════════════════════════════
+  var encParams = {};
+  if (vbr) encParams.bitrate = parseInt(vbr);
+  if (keyint) encParams.keyint_sec = parseInt(keyint);
+  // ★ select 元素已有 value 属性，直接使用，无需手动映射
+  // ★ dirty 标记：用户编辑过的字段即使为空也强制写入（空字符串=清除旧值）
+  if (rateCtrl || _rmFieldDirty['rateCtrl']) encParams.rate_control = rateCtrl || '';      // CBR/VBR/CQP/CRF
+  if (preset || _rmFieldDirty['preset']) encParams.preset = preset || '';                  // p1/p2.../p7
+  if (tune || _rmFieldDirty['tune']) encParams.tune = tune || '';                          // hq/ll/ull
+  if (multipass || _rmFieldDirty['multipass']) encParams.multipass = multipass || '';      // disabled/qres/fullres
+  if (profile || _rmFieldDirty['profile']) encParams.profile = profile || '';              // high/main/baseline
+  // 前向参考 / 自适应量化
+  encParams.lookahead = lookahead;
+  // ★ 同时写入 psycho_aq 和 adaptive_quantization 以兼容不同 OBS 版本
+  encParams.psycho_aq = psychoAq;
+  encParams.adaptive_quantization = psychoAq;
+  // B帧
+  if (bf || _rmFieldDirty['bf']) encParams.bf = bf ? parseInt(bf) : 0;
+  // 自定义选项（直接写 key=value 字符串，OBS 会自动解析）
+  // ★ 自动纠正拼写错误（slced_threads → sliced_threads）
+  if (customOpts) customOpts = customOpts.replace(/slced_threads/g, 'sliced_threads');
+  // ★ dirty 标记：用户编辑过的字段即使为空也强制写入（空字符串=清除旧值）
+  if (customOpts || _rmFieldDirty['customOpts']) {
+    var coVal = customOpts || ''; // 空字符串表示清除旧值
+    encParams['custom_encoder_options'] = coVal;
+    encParams['opts'] = coVal;
+    _rmLog('rmSaveStreamParams: customOpts="' + coVal + '" dirty=' + !!_rmFieldDirty['customOpts'] + ' (写入 custom_encoder_options + opts)');
+  }
+  _rmLog('rmSaveStreamParams: POST /encoder-settings encParams=' + JSON.stringify(encParams));
+
+  // 异步 POST，完成后提示
+  fetch(_rmEncHelperUrl + '/encoder-settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(encParams)
+  }).then(function(resp) { return resp.json(); })
+    .then(function(result) {
+      _rmLog('rmSaveStreamParams: POST result=' + JSON.stringify(result));
+      if (result.ok) {
+        clearEditing(); // ★ 保存成功，清除编辑标记，允许轮询再次同步
+        var encCount = (result.written || []).length;
+        var total = wsCount + encCount + (svr ? 1 : 0);
+        var msg = '✅ 直播参数已保存（WebSocket ' + wsCount + ' + 编码器 ' + encCount + ' = ' + total + ' 项）';
+        if (streaming) {
+          msg += '。推流中，参数已写入配置，部分实时生效。';
+        } else {
+          msg += '。已写入配置文件，下次推流时生效。';
+        }
+        msg += ' 写入: ' + (result.file || '?');
+        rmToast(msg);
+        // ★ 尝试 SetOutputSettings 让运行中 OBS 实时更新（仅推流中有效，不推流时 adv_stream output 不存在）
+        var outputEncSettings = {};
+        if (vbr) outputEncSettings.bitrate = parseInt(vbr);
+        if (rateCtrl) outputEncSettings.rate_control = rateCtrl;
+        if (preset) outputEncSettings.preset = preset;
+        if (tune) outputEncSettings.tune = tune;
+        if (multipass) outputEncSettings.multipass = multipass;
+        if (profile) outputEncSettings.profile = profile;
+        outputEncSettings.lookahead = lookahead;
+        outputEncSettings.psycho_aq = psychoAq;
+        outputEncSettings.adaptive_quantization = psychoAq;
+        if (bf) outputEncSettings.bf = parseInt(bf);
+        if (customOpts) { outputEncSettings.opts = customOpts; outputEncSettings.custom_encoder_options = customOpts; }
+        if (keyint) outputEncSettings.keyint_sec = parseInt(keyint);
+        if (streaming) {
+          _rmLog('rmSaveStreamParams: 推流中，尝试 SetOutputSettings encoderSettings=' + JSON.stringify(outputEncSettings));
+          rmSendCmd('SetOutputSettings', {
+            outputName: 'adv_stream',
+            outputSettings: { encoderSettings: outputEncSettings }
+          }, null);
+        } else {
+          _rmLog('rmSaveStreamParams: 未推流，跳过 SetOutputSettings（参数已写入配置文件，下次推流生效）');
+        }
+        // ★ 更新关键帧间隔追踪值
+        if (keyint) {
+          document.getElementById('rmKeyint').setAttribute('data-last-saved', keyint);
+        }
+      } else {
+        rmToast('❌ 编码器参数写入失败: ' + (result.error || '未知错误'));
+      }
+    })
+    .catch(function(err) {
+      _rmLog('rmSaveStreamParams: POST error ' + err.message);
+      rmToast('❌ 无法连接 helper 服务（127.0.0.1:8392）。请确认服务已启动。');
+    });
+}
+
+// blur 自动保存码率（仅当值有变化时）
+function rmAutoSaveBitrate() {
+  var st = roomManager.getState(_rmRoomId);
+  if (!st) return;
+  var vbrEl = document.getElementById('rmVBitrate');
+  var abrEl = document.getElementById('rmABitrate');
+  var vbr = vbrEl ? vbrEl.value.trim() : '';
+  var abr = abrEl ? abrEl.value.trim() : '';
+  // 解析当前状态中的码率值
+  var curVbr = (st.bitrate && st.bitrate !== '--') ? parseInt(st.bitrate) : null;
+  var curAbr = (st.audioBitrate && st.audioBitrate !== '--') ? parseInt(st.audioBitrate) : null;
+  var vbrChanged = vbr && curVbr !== null && parseInt(vbr) !== curVbr;
+  var abrChanged = abr && curAbr !== null && parseInt(abr) !== curAbr;
+  if (vbrChanged || abrChanged) {
+    _rmLog('rmAutoSaveBitrate: changed vbr=' + vbr + ' abr=' + abr + ' (was ' + curVbr + '/' + curAbr + ')');
+    rmSaveStreamParams();
+  }
+}
+
+// blur 自动保存关键帧间隔（仅当值有变化时）
+function rmAutoSaveKeyint() {
+  var el = document.getElementById('rmKeyint');
+  var newVal = el ? el.value.trim() : '';
+  if (!newVal) return;
+  // 用 data-last-saved 追踪上次保存值（绕过 gop 回读不可靠的问题）
+  var lastSaved = el.getAttribute('data-last-saved');
+  if (lastSaved !== null && parseInt(newVal) === parseInt(lastSaved)) return;
+  // 备用：从 gop 状态值提取秒数对比
+  var st = roomManager.getState(_rmRoomId);
+  if (st && st.gop && st.gop !== '--') {
+    var m = st.gop.match(/^(\d+)s/);
+    if (m && parseInt(newVal) === parseInt(m[1])) return;
+  }
+  _rmLog('rmAutoSaveKeyint: changed keyint=' + newVal + ' (was ' + (lastSaved || '?') + ')');
+  el.setAttribute('data-last-saved', newVal);
+  rmSaveStreamParams();
+}
+
+function rmSaveAudioSettings() {
+  var sr = document.getElementById('rmSampleRateSel').value; // 44.1 kHz / 48 kHz
+  var ch = document.getElementById('rmChannelSel').value;     // 立体声 / 单声道
+  if (sr) _rmSetProfileParam('Audio', 'SampleRate', sr.indexOf('48') >= 0 ? '48000' : '44100');
+  if (ch) _rmSetProfileParam('Audio', 'ChannelSetup', ch.indexOf('单') >= 0 ? 'Mono' : 'Stereo');
+  rmToast('✅ 音频设置已保存');
+}
+
+function rmSaveAudioTracks() {
+  for (var t = 1; t <= 4; t++) {
+    var brEl = document.getElementById('rmTrack' + t + 'Bitrate');
+    var nmEl = document.getElementById('rmTrack' + t + 'Name');
+    if (brEl && brEl.value.trim()) _rmSetProfileParam('AdvOut', 'Track' + t + 'Bitrate', brEl.value.trim());
+    if (nmEl && nmEl.value.trim()) _rmSetProfileParam('AdvOut', 'Track' + t + 'Name', nmEl.value.trim());
+  }
+  rmToast('✅ 音频轨道已保存');
+}
+
+function rmAddSource() {
+  // ★ 使用场景切换下拉框（rmSceneSel）获取当前场景名，而非硬编码的 "当前场景"
+  var sceneSel = document.getElementById('rmSceneSel');
+  var srcEl = document.getElementById('rmSourceSel');
+  if (!sceneSel || !srcEl) return;
+  var sceneName = sceneSel.value;
+  var srcType = srcEl.value;
+  if (!srcType || srcType === '+ 添加源') { rmToast('⚠ 请选择源类型'); return; }
+  if (!sceneName || sceneName === '加载中...') { rmToast('⚠ 未获取到当前场景，请确认OBS已连接'); return; }
+  // map Chinese names to OBS input kind
+  var kindMap = {
+    '图像': 'image_source', '媒体源': 'ffmpeg_source', '文本(GDI+)': 'text_gdiplus',
+    '浏览器': 'browser_source', '显示器捕获': 'monitor_capture', '游戏捕获': 'game_capture',
+    '窗口捕获': 'window_capture', '视频捕获设备': 'dshow_input', '音频输入捕获': 'wasapi_input_capture', '音频输出捕获': 'wasapi_output_capture'
+  };
+  var kind = kindMap[srcType] || srcType;
+  var inputName = srcType + '_' + Date.now().toString(36);
+  rmSendCmd('CreateInput', { sceneName: sceneName, inputName: inputName, inputKind: kind, sceneItemEnabled: true }, '✅ 源「' + srcType + '」已添加到 ' + sceneName);
+}
+
+// ★ v1.3.9.2 内联删除：使用 GetSceneItemList 的场景源项（来源名与 OBS UI 显示一致）
+function rmToggleRemoveSrc() {
+  var st = roomManager.getState(_rmRoomId);
+  if (!st || !st.sceneItems || !st.sceneItems.length) { rmToast('⚠ 当前场景无源可删除'); return; }
+  var panel = document.getElementById('rmSourceDel');
+  if (!panel) return;
+  if (panel.style.display === 'none' || !panel.style.display) {
+    var sel = document.getElementById('rmSourceDelSel');
+    var html = '<option value="">-- 选择要删除的源 --</option>';
+    for (var i = 0; i < st.sceneItems.length; i++) {
+      var sn = st.sceneItems[i].sourceName;
+      html += '<option value="' + i + '">' + sn.replace(/"/g, '&quot;') + '</option>';
+    }
+    sel.innerHTML = html;
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+  }
+}
+function rmHideRemoveSrc() {
+  var panel = document.getElementById('rmSourceDel');
+  if (panel) panel.style.display = 'none';
+}
+function rmDoRemoveSource() {
+  var sel = document.getElementById('rmSourceDelSel');
+  if (!sel || sel.value === '') { rmToast('⚠ 请选择要删除的源'); return; }
+  var idx = parseInt(sel.value, 10);
+  var st = roomManager.getState(_rmRoomId);
+  if (!st || !st.sceneItems || idx >= st.sceneItems.length) { rmToast('⚠ 源信息已过期，请重新展开删除面板'); return; }
+  var item = st.sceneItems[idx];
+  var sourceName = item.sourceName;
+  if (!confirm('确认永久删除源「' + sourceName + '」？此操作不可撤销。')) return;
+  var sceneName = st.scene || '';
+  if (!sceneName || sceneName === '--') { rmToast('⚠ 未获取到当前场景'); return; }
+  _rmLog('源删除: scene=' + sceneName + ' sourceName=' + sourceName + ' sceneItemId=' + item.sceneItemId);
+  // ★ v1.3.9.2: 一步到位 — RemoveSceneItem 直接从场景移除源项
+  // RemoveSceneItem 只需要 sceneName + sceneItemId，不需要事先 GetSceneItemId
+  var conn = _rmGetConn();
+  if (!conn || !conn.ws || conn.ws.readyState !== WebSocket.OPEN) { rmToast('⚠ OBS 未连接'); return; }
+  var rid = 'rm_rsi_' + Date.now();
+  var req = { op: 6, d: { requestType: 'RemoveSceneItem', requestId: rid, requestData: { sceneName: sceneName, sceneItemId: item.sceneItemId } } };
+  conn.pendingRequests.set(rid, function(d) {
+    if (d.requestStatus && d.requestStatus.code === 100) {
+      _rmLog('  ← RemoveSceneItem OK');
+      rmToast('✅ 源「' + sourceName + '」已从场景中删除');
+      // 延迟刷新下拉框
+      setTimeout(function() { rmHideRemoveSrc(); }, 500);
+    } else {
+      var err = d.requestStatus ? (d.requestStatus.comment || '错误码 ' + d.requestStatus.code) : '未知错误';
+      _rmLog('  ← RemoveSceneItem FAIL: ' + err);
+      rmToast('⚠ 删除失败: ' + err);
+    }
+    conn.pendingRequests.delete(rid);
+  });
+  try { conn.ws.send(JSON.stringify(req)); } catch(e) {
+    _rmLog('  ← RemoveSceneItem SEND FAIL: ' + (e.message || e));
+    rmToast('⚠ 发送失败');
+    conn.pendingRequests.delete(rid);
+  }
+  setTimeout(function() { conn.pendingRequests.delete(rid); }, 8000);
+}
+
+function rmAddFilter() {
+  var srcEl = document.getElementById('rmFilterSource');
+  var filterEl = document.getElementById('rmFilterTypeSel');
+  if (!srcEl || !filterEl) return;
+  var srcName = srcEl.value;
+  var filterType = filterEl.value;
+  if (!filterType || filterType === '+ 添加滤镜') { rmToast('⚠ 请选择滤镜类型'); return; }
+  if (!srcName || srcName === '选择源') { rmToast('⚠ 请先选择要应用的源（确保OBS已连接并加载源列表）'); return; }
+  // Map to OBS filter kind
+  var filterKindMap = {
+    '降噪': 'noise_suppress_filter', '增益': 'gain_filter', '压缩器': 'compressor_filter',
+    '色彩校正': 'color_filter', '绿幕扣像': 'chroma_key_filter'
+  };
+  var filterKind = filterKindMap[filterType] || filterType;
+  var filterName = filterType + '_' + Date.now().toString(36);
+  rmSendCmd('CreateSourceFilter', { sourceName: srcName, filterName: filterName, filterKind: filterKind }, '✅ 滤镜「' + filterType + '」已添加到 ' + srcName);
+}
+
+function rmRemoveFilter() {
+  var srcEl = document.getElementById('rmFilterSource');
+  if (!srcEl || !srcEl.value || srcEl.value === '选择源') {
+    rmToast('⚠ 请先选择源');
+    return;
+  }
+  var sourceName = srcEl.value;
+  var listDiv = document.getElementById('rmFilterList');
+  if (!listDiv) return;
+  var conn = _rmCheckConn(); if (!conn) return;
+  var bid = 'rm_rf_' + Date.now();
+  var req = { op: 6, d: { requestType: 'GetSourceFilterList', requestId: bid, requestData: { sourceName: sourceName } } };
+  conn.pendingRequests.set(bid, function(d) {
+    var filters = (d.responseData && d.responseData.filters) || [];
+    if (filters.length === 0) {
+      listDiv.innerHTML = '<div style="color:var(--mute)">该源没有滤镜</div>';
+      listDiv.style.display = '';
+      return;
+    }
+    var html = '<div style="color:var(--dim);margin-bottom:2px">点击移除滤镜：</div>';
+    for (var i = 0; i < filters.length; i++) {
+      var fName = filters[i].filterName;
+      var fKind = filters[i].filterKind || '';
+      html += '<div class="rm-filter-item" data-src="' + sourceName.replace(/"/g,'&quot;') + '" data-flt="' + fName.replace(/"/g,'&quot;') + '" onclick="rmDoRemoveFilter(this)">'
+            + '<span class="rm-filter-name">' + fName + '</span>'
+            + '<span class="rm-filter-kind">' + fKind + '</span>'
+            + '<span class="rm-filter-del">✕</span>'
+            + '</div>';
+    }
+    listDiv.innerHTML = html;
+    listDiv.style.display = '';
+  });
+  try { conn.ws.send(JSON.stringify(req)); } catch(e) {}
+}
+
+function rmDoRemoveFilter(el) {
+  var src = el.dataset.src;
+  var flt = el.dataset.flt;
+  if (!src || !flt) return;
+  if (!confirm('确认移除滤镜「' + flt + '」？')) return;
+  rmSendCmd('RemoveSourceFilter', { sourceName: src, filterName: flt }, '✅ 滤镜「' + flt + '」已移除');
+  setTimeout(function() {
+    var listDiv = document.getElementById('rmFilterList');
+    if (listDiv) listDiv.innerHTML = '';
+    rmRemoveFilter();
+  }, 800);
+}
+
+function refreshRemotePanelIfActive(roomId) {
+  if (_rmRoomId && _rmRoomId === roomId) {
+    var r = roomManager.get(_rmRoomId);
+    if (r) loadRemoteOBSData(r);
+  }
+}
+
 function loadRemoteOBSData(r) {
   var st = roomManager.getState(r.id);
   if (!st) return;
-  // 场景
-  if (st.scene && st.scene !== '--') {
+  // 场景列表
+  if (st.scenes && st.scenes.length > 0) {
+    var sel = document.getElementById('rmSceneSel');
+    var html = '';
+    for (var si = 0; si < st.scenes.length; si++) {
+      var sname = typeof st.scenes[si] === 'string' ? st.scenes[si] : st.scenes[si].sceneName;
+      var selAttr = (sname === st.scene) ? ' selected' : '';
+      html += '<option value="' + sname.replace(/"/g, '&quot;') + '"' + selAttr + '>' + sname + '</option>';
+    }
+    sel.innerHTML = html;
+  } else if (st.scene && st.scene !== '--') {
+    // 兼容旧数据：只有当前场景名，没有列表
     var sel = document.getElementById('rmSceneSel');
     sel.innerHTML = '<option>' + st.scene + '</option>';
   }
-  // 推流参数 - 从 pushUrl 解析
-  if (st.pushUrl && st.pushUrl !== '--') {
-    var m = st.pushUrl.match(/^rtmp:\/\/([^/]+)(\/.*)$/);
-    if (m) {
-      document.getElementById('rmStreamSvr').value = 'rtmp://' + m[1];
-      var path = m[2];
-      var parts = path.replace(/^\//, '').split('/');
-      if (parts.length > 1) {
-        document.getElementById('rmStreamKey').value = parts[parts.length-1];
+  // ★ 混音器音频源回填（有自身守卫防重复）
+  _rmRefillMixerInit(st);
+  if (!_rmParamsLoaded) {
+    _rmLoadTransitions();  // ★ 转场列表仅首次加载
+    // ★ 滤镜源下拉框回填（仅首次）
+    if (st.allInputs && st.allInputs.length > 0) {
+      var filterSrcEl = document.getElementById('rmFilterSource');
+      if (filterSrcEl) {
+        var filterHtml = '';
+        for (var fi = 0; fi < st.allInputs.length; fi++) {
+          filterHtml += '<option value="' + st.allInputs[fi].replace(/"/g, '&quot;') + '">' + st.allInputs[fi] + '</option>';
+        }
+        filterSrcEl.innerHTML = filterHtml || '<option>选择源</option>';
+      }
+    }
+    clearEditing(); // ★ 新房间打开，清除编辑标记
+    // 推流参数 - 从 pushUrl 解析
+    if (st.pushUrl && st.pushUrl !== '--') {
+      var m = st.pushUrl.match(/^rtmp:\/\/([^/]+)(\/.*)$/);
+      if (m) {
+        document.getElementById('rmStreamSvr').value = 'rtmp://' + m[1];
+        var path = m[2];
+        var parts = path.replace(/^\//, '').split('/');
+        if (parts.length > 1) {
+          document.getElementById('rmStreamKey').value = parts[parts.length-1];
+        }
+      }
+    }
+    // 分辨率
+    if (st.resolution) {
+      var parts = st.resolution.split('x');
+      if (parts.length === 2) {
+        document.getElementById('rmBaseW').value = parts[0];
+        document.getElementById('rmBaseH').value = parts[1];
+      }
+    }
+    // 码率
+    if (st.bitrate && st.bitrate !== '--') {
+      document.getElementById('rmVBitrate').value = parseInt(st.bitrate);
+    }
+    if (st.audioBitrate && st.audioBitrate !== '--') {
+      document.getElementById('rmABitrate').value = parseInt(st.audioBitrate);
+    }
+    // 关键帧间隔
+    if (st.gop && st.gop !== '--') {
+      var gopMatch = st.gop.match(/^(\d+)s/);
+      if (gopMatch) {
+        document.getElementById('rmKeyint').value = gopMatch[1];
+        document.getElementById('rmKeyint').setAttribute('data-last-saved', gopMatch[1]);
+      }
+    }
+    // ★ 编码器下拉框回填当前编码器
+    if (st.videoEncoder && st.videoEncoder !== '--') {
+      var encSel = document.getElementById('rmEncSel');
+      if (st.videoEncoder.indexOf('NVENC') >= 0) {
+        if (st.videoEncoder.indexOf('HEVC') >= 0) encSel.value = 'NVIDIA NVENC HEVC';
+        else encSel.value = 'NVIDIA NVENC H.264';
+      } else if (st.videoEncoder.indexOf('x264') >= 0) {
+        encSel.value = 'x264';
+      }
+      // 回填编码器后立即触发 UI 切换
+      switchEncoderUI();
+    }
+    // ★ 编码器参数（从 _raw* 原始值填充面板）
+    _rmRefillEncoderParams(st);
+    _rmParamsLoaded = true;
+  }
+}
+
+// 填充编码器参数到面板（可被 Phase 4 异步回调）
+function _rmRefillEncoderParams(st) {
+  if (_rmEditingParams) { _rmLog('REFILL-SKIP: 用户正在编辑，跳过参数回填'); return; }
+  _rmLog('REFILL: 开始回填编码器参数到面板 (rawRateCtrl=' + st._rawRateCtrl + ' rawBf=' + st._rawBf + ' rawCustomOpts=' + st._rawCustomOpts + ') dirty=' + JSON.stringify(_rmFieldDirty));
+  // 码率控制
+  var rawRc = st._rawRateCtrl;
+  if (rawRc && !_rmFieldDirty['rateCtrl']) {
+    var rcSel = document.getElementById('rmRateCtrl');
+    if (rcSel) {
+      for (var i = 0; i < rcSel.options.length; i++) {
+        if (rcSel.options[i].value === rawRc) { rcSel.selectedIndex = i; break; }
       }
     }
   }
-  // 分辨率
-  if (st.resolution) {
-    var parts = st.resolution.split('x');
-    if (parts.length === 2) {
-      document.getElementById('rmBaseW').value = parts[0];
-      document.getElementById('rmBaseH').value = parts[1];
+  // ★ 编码器感知：根据当前编码器类型选择正确的预设值
+  var encId = st._rawEncoderId || '';
+  var isX264 = (encId.indexOf('x264') >= 0);
+  var rawPr;
+  if (isX264) {
+    rawPr = st._rawPresetX264 || st._rawPresetNvenc; // x264 优先，fallback NVENC
+  } else {
+    rawPr = st._rawPresetNvenc || st._rawPresetX264; // NVENC 优先，fallback x264
+  }
+  if (rawPr && !_rmFieldDirty['preset']) {
+    var prSel = document.getElementById('rmPreset');
+    if (prSel) {
+      var prLow = rawPr.toLowerCase();
+      for (var i = 0; i < prSel.options.length; i++) {
+        if (prSel.options[i].value === prLow) { prSel.selectedIndex = i; break; }
+      }
     }
   }
-  // FPS
-  if (st.fpsSet) {
-    var fpsSel = document.querySelector('#rmPanel select option[value="' + st.fpsSet + '"]');
-    // Just keep defaults for now, user can change
+  // 调节（tune）— 处理 x264 空值情况
+  var rawTu = st._rawTune;
+  if (rawTu !== null && rawTu !== undefined && !_rmFieldDirty['tune']) {
+    var tuSel = document.getElementById('rmTune');
+    if (tuSel) {
+      var tuLow = rawTu.toLowerCase();
+      for (var i = 0; i < tuSel.options.length; i++) {
+        if (tuSel.options[i].value === tuLow) { tuSel.selectedIndex = i; break; }
+      }
+    }
   }
-  // 码率
-  if (st.bitrate && st.bitrate !== '--') {
-    document.getElementById('rmVBitrate').value = parseInt(st.bitrate);
+  // 多次编码（multipass）
+  var rawMp = st._rawMultipass;
+  if (rawMp && !_rmFieldDirty['multipass']) {
+    var mpSel = document.getElementById('rmMultipass');
+    if (mpSel) {
+      for (var i = 0; i < mpSel.options.length; i++) {
+        if (mpSel.options[i].value === rawMp) { mpSel.selectedIndex = i; break; }
+      }
+    }
   }
-  if (st.audioBitrate && st.audioBitrate !== '--') {
-    document.getElementById('rmABitrate').value = parseInt(st.audioBitrate);
+  // 配置文件（profile）
+  var rawPf = st._rawProfile;
+  if (rawPf && !_rmFieldDirty['profile']) {
+    var pfSel = document.getElementById('rmProfile');
+    if (pfSel) {
+      for (var i = 0; i < pfSel.options.length; i++) {
+        if (pfSel.options[i].value === rawPf) { pfSel.selectedIndex = i; break; }
+      }
+    }
   }
+  // 前向参考（lookahead）
+  if (st._rawLookahead !== null && st._rawLookahead !== undefined && !_rmFieldDirty['lookahead']) {
+    var laEl = document.getElementById('rmLookahead');
+    if (laEl) laEl.checked = !!st._rawLookahead;
+  }
+  // 自适应量化（psycho_aq）
+  if (st._rawPsychoAq !== null && st._rawPsychoAq !== undefined && !_rmFieldDirty['psychoAq']) {
+    var aqEl = document.getElementById('rmPsychoAq');
+    if (aqEl) aqEl.checked = !!st._rawPsychoAq;
+  }
+  // B帧
+  if (st._rawBf !== null && st._rawBf !== undefined && !_rmFieldDirty['bf']) {
+    var bfEl = document.getElementById('rmBf');
+    if (bfEl) bfEl.value = st._rawBf;
+  }
+  // 自定义选项（同时读 opts 和 custom_encoder_options）
+  if (st._rawCustomOpts !== null && st._rawCustomOpts !== undefined && !_rmFieldDirty['customOpts']) {
+    var coEl = document.getElementById('rmCustomOpts');
+    if (coEl) coEl.value = st._rawCustomOpts;
+  }
+  _rmLog('REFILL-DONE: rateCtrl=' + (rawRc||'?') + ' preset=' + (rawPr||'?') + ' bf=' + (st._rawBf!==null?st._rawBf:'?') + ' customOpts=' + (st._rawCustomOpts||'?'));
+}
+
+// ★ v1.3.8.0 混音器音频源渲染（增强版：音量滑块+静音+右键菜单+设备选择）
+function _rmRefillMixerInit(st) {
+  var mixerBody = document.getElementById('rmMixerBody');
+  if (!mixerBody) return;
+  if (!st.audioInputs || st.audioInputs.length === 0) return;
+  // ★ v1.3.8.1 只首次初始化，避免轮询循环中重复重建 DOM（导致设备列表/滑块跳动）
+  if (mixerBody.querySelector('.rm-mixer-row')) return;
+  var kinds = st.audioInputKinds || {};
+  var vols = (st.allAudioVolumesPoll && st.allAudioVolumesPoll.volumes) || {};
+  var mutes = (st.allAudioVolumesPoll && st.allAudioVolumesPoll.mutes) || {};
+  var peaks = st.allAudioVolumes || {};
+  var mixHtml = '';
+  function jsEsc(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+  function htmlEsc(s) { return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+  for (var ai = 0; ai < st.audioInputs.length; ai++) {
+    var aName = st.audioInputs[ai];
+    var akind = (kinds[aName] || '').toLowerCase();
+    var volMul = (vols[aName] && vols[aName].mul !== undefined) ? vols[aName].mul : 1;
+    var isMuted = !!mutes[aName];
+    var peakMul = (peaks[aName] && peaks[aName].peakMul !== undefined) ? peaks[aName].peakMul : 0;
+    var peakDb = (peaks[aName] && peaks[aName].peakDb !== undefined) ? peaks[aName].peakDb : -100;
+    var volPct = Math.round(volMul * 100);
+    // ★ v1.3.8.2 所有音频输入源都显示设备选择器，由 GetInputPropertiesListPropertyItems 返回的设备列表决定实际显示
+    // 避免依赖 inputKind 匹配——桌面音频可能用 wasapi_output_capture 等变体，下划线前缀还会被响应式系统跳过
+    var hasDevice = true;
+    var jn = jsEsc(aName);
+    var hn = htmlEsc(aName);
+    mixHtml += '<div class="rm-mixer-row" id="rmMixRow-' + ai + '" oncontextmenu="rmShowMixerMenu(\'' + jn + '\',' + ai + ',event);return false">'
+      + '<span class="rm-mixer-name" title="右键查看更多选项">🎤 <span id="rmMixName-' + ai + '">' + hn + '</span></span>'
+      + '<div class="rm-mixer-vol"><input type="range" min="0" max="100" value="' + volPct + '" id="rmMixVol-' + ai + '" data-input-name="' + hn + '" oninput="rmMixerSetVolume(this.dataset.inputName,this.value/100)" onchange="rmMixerSetVolume(this.dataset.inputName,this.value/100)" title="音量: ' + volPct + '%"><span class="rm-mixer-vol-val" id="rmMixVolVal-' + ai + '">' + volPct + '%</span></div>'
+      + '<div class="rm-mixer-bar" style="flex:0.6;min-width:40px"><div class="rm-mixer-fill" id="rmMixFill-' + ai + '" style="width:' + Math.round(peakMul * 100) + '%"></div></div>'
+      + '<span class="rm-mixer-db" id="rmMixDb-' + ai + '">' + (isMuted ? '已静音' : (peakDb > -96 ? peakDb.toFixed(1) + ' dB' : '--')) + '</span>'
+      + '<button class="rm-mixer-mute' + (isMuted ? ' muted' : '') + '" id="rmMixMute-' + ai + '" data-input-name="' + hn + '" data-idx="' + ai + '" onclick="rmMixerToggleMute(this.dataset.inputName,' + ai + ')" title="' + (isMuted ? '取消静音' : '静音') + '">' + (isMuted ? '🔇' : '🔊') + '</button>';
+    if (hasDevice) {
+      mixHtml += '<div class="rm-mixer-device"><select class="rm-sel" id="rmMixDev-' + ai + '" data-input-name="' + hn + '" onchange="rmMixerChangeDevice(this.dataset.inputName,this.value)" title="切换音频设备"><option>-- 设备 --</option></select></div>';
+    }
+    mixHtml += '<button class="rm-btn" style="font-size:10px;padding:2px 6px" onclick="rmMixerLoadFilters(\'' + jn + '\')" title="音频滤镜">⚙</button>';
+    mixHtml += '</div>'
+      + '<div class="rm-mixer-filters" id="rmMixFilters-' + ai + '" data-source-name="' + hn + '"><div class="rm-filter-item" style="justify-content:center"><button class="rm-btn rm-add-filter-btn" style="font-size:10px" onclick="rmMixerAddFilterPrompt(event,\'' + jn + '\')">+ 添加滤镜</button></div></div>';
+  }
+  mixerBody.innerHTML = mixHtml;
+  // 延迟加载设备列表（需要异步 WebSocket 调用）
+  setTimeout(function() { rmMixerLoadDevices(st); }, 500);
+}
+
+// ★ v1.3.8.0 混音器刷新：更新电平条+dB+静音状态
+function _rmRefillMixer(st) {
+  var mixerBody = document.getElementById('rmMixerBody');
+  if (!mixerBody) return;
+  if (!st.audioInputs || st.audioInputs.length === 0) return;
+  var mutes = (st.allAudioVolumesPoll && st.allAudioVolumesPoll.mutes) || {};
+  var volPoll = (st.allAudioVolumesPoll && st.allAudioVolumesPoll.volumes) || {};
+  var peaks = st.allAudioVolumes || {};
+  for (var ci = 0; ci < st.audioInputs.length; ci++) {
+    var aName = st.audioInputs[ci];
+    var isMuted = !!mutes[aName];
+    var peakMul = (peaks[aName] && peaks[aName].peakMul !== undefined) ? peaks[aName].peakMul : 0;
+    var peakDb = (peaks[aName] && peaks[aName].peakDb !== undefined) ? peaks[aName].peakDb : -100;
+    // 更新电平条
+    var fillEl = document.getElementById('rmMixFill-' + ci);
+    var dbEl = document.getElementById('rmMixDb-' + ci);
+    var muteEl = document.getElementById('rmMixMute-' + ci);
+    if (fillEl) fillEl.style.width = Math.round(peakMul * 100) + '%';
+    if (dbEl) dbEl.textContent = isMuted ? '已静音' : (peakDb > -96 ? peakDb.toFixed(1) + ' dB' : '--');
+    if (muteEl) {
+      if (isMuted) { muteEl.classList.add('muted'); muteEl.textContent = '🔇'; muteEl.title = '取消静音'; }
+      else { muteEl.classList.remove('muted'); muteEl.textContent = '🔊'; muteEl.title = '静音'; }
+    }
+    // 更新音量滑块（仅在轮询数据更新时）
+    var volData = volPoll[aName];
+    if (volData && volData.mul !== undefined) {
+      var volEl = document.getElementById('rmMixVol-' + ci);
+      var volValEl = document.getElementById('rmMixVolVal-' + ci);
+      var volPct = Math.round(volData.mul * 100);
+      if (volEl && volEl !== document.activeElement) volEl.value = volPct;
+      if (volValEl) volValEl.textContent = volPct + '%';
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+// ★ v1.3.8.0 混音器交互函数
+// ═══════════════════════════════════════
+
+var _rmCtxMenuTarget = null; // 右键菜单目标
+
+function rmShowMixerMenu(inputName, idx, event) {
+  event.preventDefault(); event.stopPropagation();
+  var menu = document.getElementById('rmCtxMenu');
+  if (!menu) return;
+  _rmCtxMenuTarget = { name: inputName, idx: idx };
+  var st = roomManager.getState(_rmRoomId);
+  var mutes = (st && st.allAudioVolumesPoll && st.allAudioVolumesPoll.mutes) || {};
+  var isMuted = !!mutes[inputName];
+  var escName = inputName.replace(/'/g, '\\\'').replace(/"/g, '&quot;');
+  menu.innerHTML =
+    '<div class="rm-ctx-item" onclick="rmMixerToggleMute(\'' + escName + '\',' + idx + ');rmHideMixerMenu()">' + (isMuted ? '🔊 取消静音' : '🔇 静音') + '</div>' +
+    '<div class="rm-ctx-divider"></div>' +
+    '<div class="rm-ctx-item" onclick="rmMixerRenamePrompt(\'' + escName + '\');rmHideMixerMenu()">✏ 重命名</div>' +
+    '<div class="rm-ctx-item" onclick="rmMixerLoadFilters(\'' + escName + '\');rmHideMixerMenu()">🎛 滤镜</div>' +
+    '<div class="rm-ctx-item" onclick="rmMixerShowAdvAudio(\'' + escName + '\');rmHideMixerMenu()">⚙ 高级音频属性</div>';
+  // 显示坐标（确保不超出屏幕）
+  var x = event.clientX, y = event.clientY;
+  if (x + 200 > window.innerWidth) x = window.innerWidth - 205;
+  if (y + menu.offsetHeight > window.innerHeight) y = window.innerHeight - menu.offsetHeight - 10;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  menu.style.display = 'block';
+}
+
+function rmHideMixerMenu() {
+  var menu = document.getElementById('rmCtxMenu');
+  if (menu) menu.style.display = 'none';
+  _rmCtxMenuTarget = null;
+}
+
+// 点击其他地方关闭菜单
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('rmCtxMenu');
+  if (menu && menu.style.display === 'block' && !menu.contains(e.target)) {
+    menu.style.display = 'none';
+  }
+});
+
+function rmMixerSetVolume(inputName, mul) {
+  if (!_rmRoomId) return;
+  var st = roomManager.getState(_rmRoomId);
+  if (!st) return;
+  rmSendCmd('SetInputVolume', { inputName: inputName, inputVolumeMul: Math.max(0, Math.min(parseFloat(mul), 1)) }, null);
+  // 即时更新本地显示的 % 值
+  for (var ai = 0; ai < (st.audioInputs || []).length; ai++) {
+    if (st.audioInputs[ai] === inputName) {
+      var valEl = document.getElementById('rmMixVolVal-' + ai);
+      if (valEl) valEl.textContent = Math.round(mul * 100) + '%';
+      break;
+    }
+  }
+}
+
+function rmMixerToggleMute(inputName, idx) {
+  if (!_rmRoomId) return;
+  var st = roomManager.getState(_rmRoomId);
+  if (!st) return;
+  var mutes = (st.allAudioVolumesPoll && st.allAudioVolumesPoll.mutes) || {};
+  var isMuted = !!mutes[inputName];
+  var newMuted = !isMuted;
+  rmSendCmd('SetInputMute', { inputName: inputName, inputMuted: newMuted }, (newMuted ? '🔇 ' : '🔊 ') + inputName + (newMuted ? ' 已静音' : ' 已取消静音'));
+  // 即时更新 UI
+  var muteEl = document.getElementById('rmMixMute-' + idx);
+  var dbEl = document.getElementById('rmMixDb-' + idx);
+  if (muteEl) {
+    if (newMuted) { muteEl.classList.add('muted'); muteEl.textContent = '🔇'; muteEl.title = '取消静音'; }
+    else { muteEl.classList.remove('muted'); muteEl.textContent = '🔊'; muteEl.title = '静音'; }
+  }
+  if (dbEl && newMuted) dbEl.textContent = '已静音';
+}
+
+function rmMixerRenamePrompt(inputName) {
+  var newName = prompt('重命名音频源「' + inputName + '」为:', inputName);
+  if (!newName || newName === inputName) return;
+  rmSendCmd('SetInputName', { inputName: inputName, newInputName: newName }, '✅ 已重命名为「' + newName + '」');
+  // 更新显示
+  var st = roomManager.getState(_rmRoomId);
+  if (st && st.audioInputs) {
+    for (var ai = 0; ai < st.audioInputs.length; ai++) {
+      if (st.audioInputs[ai] === inputName) {
+        var nameEl = document.getElementById('rmMixName-' + ai);
+        if (nameEl) nameEl.textContent = newName;
+        st.audioInputs[ai] = newName;
+        break;
+      }
+    }
+  }
+}
+
+// 加载设备列表（在混音器首次渲染后调用）
+function rmMixerLoadDevices(st) {
+  if (!st || !st.audioInputs) return;
+  for (var ai = 0; ai < st.audioInputs.length; ai++) {
+    rmMixerFetchDevices(st.audioInputs[ai], ai);
+  }
+}
+
+var _rmDevReqCtr = 0; // ★ v1.3.8.4 全局计数器，避免 requestId 毫秒级碰撞
+function rmMixerFetchDevices(inputName, idx) {
+  var conn = _rmGetConn();
+  if (!conn || !conn.ws || conn.ws.readyState !== WebSocket.OPEN) {
+    console.log('[混音器] 设备查询跳过:', inputName, '连接未就绪 ws.state=', conn ? (conn.ws ? conn.ws.readyState : 'NO_WS') : 'NO_CONN');
+    return;
+  }
+  var bid = 'rm_dev_' + (++_rmDevReqCtr) + '_' + Date.now(); // ★ 唯一 ID
+  var req = { op: 6, d: { requestType: 'GetInputPropertiesListPropertyItems', requestId: bid, requestData: { inputName: inputName, propertyName: 'device_id' } } };
+  console.log('[混音器] 查询设备列表:', inputName, 'requestId:', bid);
+  conn.pendingRequests.set(bid, function(d) {
+    var code = d.requestStatus ? d.requestStatus.code : 'NO_STATUS';
+    var comment = d.requestStatus ? (d.requestStatus.comment || '') : '';
+    var itemCount = (d.responseData && d.responseData.propertyItems) ? d.responseData.propertyItems.length : -1;
+    console.log('[混音器] 设备列表响应:', inputName, 'status:', code, comment, 'items:', itemCount);
+    if (code === 100) {
+      var items = (d.responseData && d.responseData.propertyItems) || [];
+      var sel = document.getElementById('rmMixDev-' + idx);
+      if (sel) {
+        var html = '';
+        for (var i = 0; i < items.length; i++) {
+          var itemVal = items[i].itemValue || items[i].itemName || '';
+          var itemLabel = items[i].itemName || itemVal;
+          html += '<option value="' + itemVal.replace(/"/g, '&quot;') + '">' + itemLabel + '</option>';
+        }
+        sel.innerHTML = html || '<option>-- 无设备 --</option>';
+      }
+    } else {
+      // ★ 失败时也显示错误信息，帮助调试
+      var sel2 = document.getElementById('rmMixDev-' + idx);
+      if (sel2 && code !== 'NO_STATUS') {
+        sel2.innerHTML = '<option>-- 错误(' + code + ') --</option>';
+      }
+    }
+    conn.pendingRequests.delete(bid);
+  });
+  try { conn.ws.send(JSON.stringify(req)); } catch(e) { console.error('[混音器] 设备查询发送失败:', inputName, e); }
+}
+
+function rmMixerChangeDevice(inputName, device) {
+  if (!device || device.indexOf('--') === 0) return;
+  console.log('[混音器] 切换设备:', inputName, '→', device);
+  rmSendCmd('SetInputSettings', { inputName: inputName, inputSettings: { device_id: device } }, '✅ 设备已切换: ' + device);
+}
+
+// 滤镜管理
+// ★ v1.3.8.17 内部刷新函数：强制重载滤镜列表内容，不 toggle 展开/收起
+function _rmMixerReloadFilters(inputName) {
+  _rmLog('滤镜刷新: source=' + inputName);
+  if (!_rmRoomId) return;
+  var st = roomManager.getState(_rmRoomId);
+  if (!st) return;
+  var idx = -1;
+  for (var ai = 0; ai < (st.audioInputs || []).length; ai++) {
+    if (st.audioInputs[ai] === inputName) { idx = ai; break; }
+  }
+  var filterDiv = idx >= 0 ? document.getElementById('rmMixFilters-' + idx) : null;
+  if (!filterDiv) return;
+  var conn = _rmGetConn();
+  if (!conn || !conn.ws || conn.ws.readyState !== WebSocket.OPEN) return;
+  var escName = inputName;
+  var bid = 'rm_flr_' + Date.now();
+  var req = { op: 6, d: { requestType: 'GetSourceFilterList', requestId: bid, requestData: { sourceName: escName } } };
+  conn.pendingRequests.set(bid, function(d) {
+    if (filterDiv) {
+      var filters = (d.responseData && d.responseData.filters) || [];
+      var html = '';
+      for (var fi = 0; fi < filters.length; fi++) {
+        var fName = filters[fi].filterName || '未命名';
+        var fKind = _rmFilterKindLabels[filters[fi].filterKind] || filters[fi].filterKind || '';
+        html += '<div class="rm-filter-item">'
+          + '<span class="rm-filter-name">' + fName + '</span>'
+          + '<span class="rm-filter-kind">' + fKind + '</span>'
+          + '<span class="rm-filter-del" onclick="rmMixerRemoveFilter(\'' + escName.replace(/'/g, "\\'") + '\',\'' + fName.replace(/'/g, "\\'") + '\')">✕</span>'
+          + '</div>';
+      }
+      html += '<div class="rm-filter-item" style="justify-content:center"><button class="rm-btn" style="font-size:10px" onclick="rmMixerAddFilterPrompt(event,\'' + escName.replace(/'/g, "\\'") + '\')">+ 添加滤镜</button></div>';
+      filterDiv.innerHTML = html;
+    }
+    conn.pendingRequests.delete(bid);
+  });
+  try { conn.ws.send(JSON.stringify(req)); } catch(e) {}
+}
+
+function rmMixerLoadFilters(inputName) {
+  _rmLog('加载滤镜列表: source=' + inputName + ' _rmRoomId=' + _rmRoomId);
+  if (!_rmRoomId) return;
+  var st = roomManager.getState(_rmRoomId);
+  if (!st) return;
+  var idx = -1;
+  for (var ai = 0; ai < (st.audioInputs || []).length; ai++) {
+    if (st.audioInputs[ai] === inputName) { idx = ai; break; }
+  }
+  var filterDiv = idx >= 0 ? document.getElementById('rmMixFilters-' + idx) : null;
+  // 切换展开/折叠
+  if (filterDiv) {
+    if (filterDiv.classList.contains('open')) { filterDiv.classList.remove('open'); return; }
+    filterDiv.classList.add('open');
+  }
+  // 异步获取滤镜列表
+  var conn = _rmGetConn();
+  if (!conn || !conn.ws || conn.ws.readyState !== WebSocket.OPEN) return;
+  var escName = inputName;
+  var bid = 'rm_fl_' + Date.now();
+  var req = { op: 6, d: { requestType: 'GetSourceFilterList', requestId: bid, requestData: { sourceName: escName } } };
+  conn.pendingRequests.set(bid, function(d) {
+    if (filterDiv) {
+      var filters = (d.responseData && d.responseData.filters) || [];
+      var html = '';
+      for (var fi = 0; fi < filters.length; fi++) {
+        var fName = filters[fi].filterName || '未命名';
+        var fKind = _rmFilterKindLabels[filters[fi].filterKind] || filters[fi].filterKind || '';
+        html += '<div class="rm-filter-item">'
+          + '<span class="rm-filter-name">' + fName + '</span>'
+          + '<span class="rm-filter-kind">' + fKind + '</span>'
+          + '<span class="rm-filter-del" onclick="rmMixerRemoveFilter(\'' + escName.replace(/'/g, '\\\'') + '\',\'' + fName.replace(/'/g, '\\\'') + '\')">✕</span>'
+          + '</div>';
+      }
+      html += '<div class="rm-filter-item" style="justify-content:center"><button class="rm-btn" style="font-size:10px" onclick="rmMixerAddFilterPrompt(event,\'' + escName.replace(/'/g, '\\\'') + '\')">+ 添加滤镜</button></div>';
+      filterDiv.innerHTML = html;
+    }
+    conn.pendingRequests.delete(bid);
+  });
+  try { conn.ws.send(JSON.stringify(req)); } catch(e) {}
+}
+
+function rmMixerRemoveFilter(sourceName, filterName) {
+  _rmLog('滤镜移除: source=' + sourceName + ' filterName=' + filterName);
+  if (!confirm('确认移除滤镜「' + filterName + '」？')) return;
+  rmSendCmd('RemoveSourceFilter', { sourceName: sourceName, filterName: filterName }, '✅ 滤镜「' + filterName + '」已移除');
+  // ★ v1.3.8.17 强制重载而非 toggle
+  setTimeout(function() { _rmMixerReloadFilters(sourceName); }, 800);
+}
+
+function rmMixerAddFilterPrompt(evt, sourceName) {
+  _rmLog('滤镜菜单: 点击添加滤镜 source=' + sourceName);
+  // ★ v1.3.8.16 内联方案：不使用 rmCtxMenu 弹窗（Electron 中 position:fixed 被裁剪），直接在按钮所在容器内展开
+  var container = (evt && evt.target) ? evt.target.closest('.rm-mixer-filters') : null;
+  if (!container) { rmToast('⚠ 找不到滤镜容器'); return; }
+  // 如果已展开则收起
+  var existing = container.querySelector('.rm-filter-opts-inline');
+  if (existing) { existing.remove(); return; }
+  var opts = [
+    { label: '🎙 降噪', kind: 'noise_suppress_filter' },
+    { label: '📈 增益', kind: 'gain_filter' },
+    { label: '📉 压缩器', kind: 'compressor_filter' },
+    { label: '🔊 限幅器', kind: 'expander_filter' },
+    { label: '🎚 3段均衡器', kind: 'basic_eq_filter' }
+  ];
+  var escName = sourceName.replace(/'/g, "\\'");
+  var html = '<div class="rm-filter-opts-inline" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;padding:4px 0">';
+  for (var i = 0; i < opts.length; i++) {
+    var o = opts[i];
+    html += '<button class="rm-btn" style="font-size:10px;padding:2px 6px" onclick="rmMixerDoAddFilter(\'' + escName + '\',\'' + o.kind + '\')">' + o.label + '</button>';
+  }
+  html += '<button class="rm-btn" style="font-size:10px;padding:2px 6px;color:var(--mute)" onclick="this.closest(\'.rm-filter-opts-inline\').remove()">取消</button>';
+  html += '</div>';
+  container.insertAdjacentHTML('beforeend', html);
+}
+
+// ★ v1.3.8.17 filterKind → 中文名映射
+var _rmFilterKindLabels = {
+  'noise_suppress_filter': '降噪', 'gain_filter': '增益', 'compressor_filter': '压缩器',
+  'expander_filter': '限幅器', 'basic_eq_filter': '3段均衡器',
+  'color_filter': '色彩校正', 'chroma_key_filter': '绿幕扣像'
+};
+
+function rmMixerDoAddFilter(sourceName, filterKind) {
+  _rmLog('滤镜添加: source=' + sourceName + ' kind=' + filterKind);
+  // ★ v1.3.8.16 内联方案：移除展开的滤镜选项
+  var optsDiv = document.querySelector('.rm-filter-opts-inline');
+  if (optsDiv) optsDiv.remove();
+  // ★ v1.3.8.17 使用中文名作为滤镜名前缀
+  var cnLabel = _rmFilterKindLabels[filterKind] || filterKind;
+  var filterName = cnLabel + '_' + Date.now().toString(36);
+  rmSendCmd('CreateSourceFilter', { sourceName: sourceName, filterName: filterName, filterKind: filterKind }, '✅ 滤镜已添加');
+  // ★ v1.3.8.17 刷新时不再 toggle，直接强制重载内容
+  setTimeout(function() { _rmMixerReloadFilters(sourceName); }, 800);
+}
+
+// 高级音频属性
+var _rmAdvAudioSrc = null;
+
+function rmMixerShowAdvAudio(inputName) {
+  _rmAdvAudioSrc = inputName;
+  document.getElementById('rmAdvSrcName').textContent = inputName;
+  document.getElementById('rmAdvAudioModal').style.display = 'block';
+  // 查询当前设置
+  var conn = _rmGetConn();
+  if (!conn || !conn.ws || conn.ws.readyState !== WebSocket.OPEN) return;
+  var bid = 'rm_adv_' + Date.now();
+  var batchReq = { op: 8, d: { requestId: bid, haltOnFailure: false, requests: [
+    { requestId: bid + '_mon', requestType: 'GetInputAudioMonitorType', requestData: { inputName: inputName } },
+    { requestId: bid + '_sync', requestType: 'GetInputAudioSyncOffset', requestData: { inputName: inputName } },
+    { requestId: bid + '_trk', requestType: 'GetInputAudioTracks', requestData: { inputName: inputName } }
+  ] } };
+  conn.pendingRequests.set(bid, function(d) {
+    if (d.results) {
+      for (var ri = 0; ri < d.results.length; ri++) {
+        var rd = d.results[ri];
+        if (!rd.responseData) continue;
+        if (rd.requestType === 'GetInputAudioMonitorType') {
+          var monEl = document.getElementById('rmAdvMonitor');
+          if (monEl) monEl.value = rd.responseData.monitorType || 'none';
+        }
+        if (rd.requestType === 'GetInputAudioSyncOffset') {
+          var syncEl = document.getElementById('rmAdvSyncOffset');
+          if (syncEl) syncEl.value = rd.responseData.inputAudioSyncOffset || 0;
+        }
+        if (rd.requestType === 'GetInputAudioTracks') {
+          var tracks = rd.responseData.inputAudioTracks || {};
+          var cbs = document.querySelectorAll('#rmAdvTracks input[type=checkbox]');
+          for (var ci = 0; ci < cbs.length; ci++) {
+            cbs[ci].checked = !!tracks[cbs[ci].value];
+          }
+        }
+      }
+    }
+    conn.pendingRequests.delete(bid);
+  });
+  try { conn.ws.send(JSON.stringify(batchReq)); } catch(e) {}
+}
+
+function rmSaveAdvAudio() {
+  if (!_rmAdvAudioSrc) return;
+  var monitor = document.getElementById('rmAdvMonitor').value;
+  var syncOffset = parseInt(document.getElementById('rmAdvSyncOffset').value) || 0;
+  var cbs = document.querySelectorAll('#rmAdvTracks input[type=checkbox]');
+  var tracks = {};
+  for (var ci = 0; ci < cbs.length; ci++) { tracks[cbs[ci].value] = cbs[ci].checked; }
+  // 批量发送
+  rmSendCmd('SetInputAudioMonitorType', { inputName: _rmAdvAudioSrc, monitorType: monitor }, null);
+  rmSendCmd('SetInputAudioSyncOffset', { inputName: _rmAdvAudioSrc, inputAudioSyncOffset: syncOffset }, null);
+  rmSendCmd('SetInputAudioTracks', { inputName: _rmAdvAudioSrc, inputAudioTracks: tracks }, null);
+  document.getElementById('rmAdvAudioModal').style.display = 'none';
+  rmToast('✅ 高级音频属性已保存');
 }
 
 // ═══════════════════════════════════════
@@ -2786,6 +4524,8 @@ function copyText(t) {
 document.addEventListener('keydown', e => { const m = document.getElementById('modalOverlay'); if (m.style.display === 'none') return; if (e.key === 'Escape') { hideModal(); return; } if (e.key === 'Enter') { saveRoom(); return; } });
 window.addEventListener('beforeunload', () => { for (const [id, c] of roomManager.connections) c.destroy(); });
 setInterval(() => { updateAllCards(); updateSummary(); }, 3000);
+// 统计数据采集：每 60 秒采样一次房间状态快照
+setInterval(() => { statsCollectNow(); }, 60000);
 // 从 obs-rooms.json 同步 remotePassword 到 localStorage
 (function initSync() {
   fetch('/obs-rooms.json').then(function(r) { return r.ok ? r.json() : Promise.reject(); }).then(function(seed) {
@@ -2799,6 +4539,8 @@ setInterval(() => { updateAllCards(); updateSummary(); }, 3000);
     if (changed) { console.log('[initSync] remotePassword synced from obs-rooms.json'); roomManager.save(); }
   }).catch(function(){}).finally(function() {
     roomManager.connectAll(); renderAll(); renderSideTree(); updateSummary();
+    // 启动后立即采集一次统计数据
+    setTimeout(function() { statsCollectNow(); }, 5000);
   });
 })();
 
@@ -2852,8 +4594,736 @@ function saveLog() {
   URL.revokeObjectURL(a.href);
   _diag('SAVE', '日志已下载 → ' + filename);
 }
+
+// ═══ OBS 日志查看（v1.6.0 部署版 — 直连 OBS 主机 8393）═══
+var OBS_LOG_PORT = 8393; // 每台 OBS 主机上部署的日志服务端口
+var _obsLogAutoTimer = null;
+var _obsLogCurrentName = null;
+var _obsLogAllContent = '';
+var _obsLogCurrentHost = '';
+var _obsLogFiles = [];
+
+// 日志请求 helper：根据主机 IP 构建 URL
+function _logUrl(path) {
+  var base = 'http://' + (_obsLogCurrentHost || '127.0.0.1') + ':' + OBS_LOG_PORT;
+  return base + path;
+}
+
+// 打开浮层弹窗（可传入 host 查看指定主机日志）
+function openObsLogModal(host, roomName) {
+  _obsLogCurrentHost = host || '';
+  var mainTitle = document.getElementById('obsLogModalMainTitle');
+  if (mainTitle) {
+    if (roomName) {
+      mainTitle.textContent = '📋 ' + roomName + ' - OBS 日志';
+    } else if (_obsLogCurrentHost) {
+      mainTitle.textContent = '📋 ' + _obsLogCurrentHost + ' 的 OBS 日志';
+    } else {
+      mainTitle.textContent = '📋 OBS 日志查看器';
+    }
+  }
+  // 从卡片入口（指定了host）：隐藏主机选择器，直接加载该主机日志
+  var hostSel = document.getElementById('obsLogHostSel');
+  if (host && hostSel) {
+    hostSel.style.display = 'none';
+  } else if (hostSel) {
+    hostSel.style.display = '';
+  }
+  document.getElementById('obsLogModalOverlay').style.display = '';
+  // 加载主机列表 + 刷新日志
+  obsLogLoadHostList(host);
+}
+
+// 加载主机选择器列表（从当前直播间列表获取）
+function obsLogLoadHostList(preselectHost) {
+  var sel = document.getElementById('obsLogHostSel');
+  sel.innerHTML = '';
+
+  // 始终添加「本机」选项
+  var optLocal = document.createElement('option');
+  optLocal.value = '';
+  optLocal.textContent = '🖥 本机 (127.0.0.1)';
+  sel.appendChild(optLocal);
+
+  // 从房间列表添加已配置的主机
+  try {
+    var hosts = {};
+    for (var i = 0; i < _rooms.length; i++) {
+      var r = _rooms[i];
+      if (r.ip && !hosts[r.ip]) {
+        hosts[r.ip] = r;
+        var opt = document.createElement('option');
+        opt.value = r.ip;
+        opt.textContent = '🌐 ' + r.ip + (r.name ? ' (' + r.name + ')' : '');
+        sel.appendChild(opt);
+      }
+    }
+  } catch (_) {}
+
+  // 预选
+  if (preselectHost) {
+    var found = false;
+    for (var j = 0; j < sel.options.length; j++) {
+      if (sel.options[j].value === preselectHost) { sel.selectedIndex = j; found = true; break; }
+    }
+    if (!found) {
+      var tmpOpt = document.createElement('option');
+      tmpOpt.value = preselectHost;
+      tmpOpt.textContent = '🌐 ' + preselectHost + ' (未配置房间)';
+      sel.appendChild(tmpOpt);
+      sel.selectedIndex = sel.options.length - 1;
+    }
+  }
+  obsLogRefresh2();
+}
+
+// 切换主机
+function obsLogSwitchHost() {
+  var sel = document.getElementById('obsLogHostSel');
+  _obsLogCurrentHost = sel.value;
+  var mainTitle = document.getElementById('obsLogModalMainTitle');
+  if (mainTitle) {
+    mainTitle.textContent = _obsLogCurrentHost ? '📋 ' + _obsLogCurrentHost + ' 的 OBS 日志' : '📋 OBS 日志查看器';
+  }
+  // 清空日志内容和文件选择器
+  document.getElementById('obsLogTextarea').value = '切换主机中...';
+  var fileSel = document.getElementById('obsLogFileSel');
+  fileSel.innerHTML = '<option value="">— 加载中 —</option>';
+  _obsLogFiles = [];
+  obsLogRefresh2();
+}
+
+// 关闭浮层弹窗
+function closeObsLogModal() {
+  document.getElementById('obsLogModalOverlay').style.display = 'none';
+  // 停止自动刷新
+  if (_obsLogAutoTimer) { clearInterval(_obsLogAutoTimer); _obsLogAutoTimer = null; }
+  var cb = document.getElementById('obsLogAutoRefresh');
+  if (cb) cb.checked = false;
+}
+
+// 刷新：拉文件列表 → 填充选择器 → 自动加载最新
+function obsLogRefresh2() {
+  var ta = document.getElementById('obsLogTextarea');
+  if (!ta) return;
+  ta.value = '加载日志文件列表...';
+  document.getElementById('obsLogStatus').textContent = '⏳';
+  fetch(_logUrl('/logs'))
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      if (!data.ok) {
+        var hostLabel = _obsLogCurrentHost || '本机';
+        ta.value = '⚠ 无法读取 ' + hostLabel + ' 的 OBS 日志\n\n' +
+          '原因: ' + (data.error || '未知错误') + '\n\n' +
+          (_obsLogCurrentHost ?
+            '请确认：\n1. 该主机已部署 obs-log-service（点击「📥 部署说明」）\n2. 该主机防火墙已开放端口 ' + OBS_LOG_PORT + '\n3. 该主机与你的电脑在同一网络/VLAN' :
+            '请确认 obs-log-service 已在本机运行\n运行 install-obs-log-service.bat');
+        document.getElementById('obsLogFileInfo').textContent = '❌ ' + (data.error || '读取失败');
+        return;
+      }
+      if (!data.files || !data.files.length) {
+        ta.value = '(暂无 OBS 日志文件)\n\n日志目录: ' + (data.logDir || '未知') + '\n请确认 OBS 已至少运行过一次。';
+        document.getElementById('obsLogFileInfo').textContent = '无日志文件';
+        document.getElementById('obsLogFileSel').innerHTML = '<option value="">— 无日志文件 —</option>';
+        return;
+      }
+      // 存储并填充文件选择器
+      _obsLogFiles = data.files;
+      var fileSel = document.getElementById('obsLogFileSel');
+      fileSel.innerHTML = '';
+      for (var i = 0; i < data.files.length; i++) {
+        var f = data.files[i];
+        var opt = document.createElement('option');
+        opt.value = f.name;
+        var sizeKB = (f.size / 1024).toFixed(1);
+        var mtime = f.mtime ? f.mtime.replace('T', ' ').slice(0, 19) : '';
+        opt.textContent = f.name + '  (' + sizeKB + ' KB' + (mtime ? ', ' + mtime : '') + ')';
+        fileSel.appendChild(opt);
+      }
+      fileSel.selectedIndex = 0;
+      // 自动加载最新
+      obsLogLoadFileContent(data.files[0].name);
+    })
+    .catch(function(e) {
+      var hostLabel = _obsLogCurrentHost || '本机';
+      ta.value = '⚠ 无法连接 ' + hostLabel + ' 的日志服务 (:8393)\n\n' +
+        '可能原因：\n' +
+        '1. 该主机尚未部署 obs-log-service\n' +
+        '2. 该主机防火墙阻止了端口 ' + OBS_LOG_PORT + '\n' +
+        '3. 该主机不在线或 IP 不可达\n\n' +
+        '请点击「📥 部署说明」查看部署步骤\n' +
+        '或检查主机 ' + hostLabel + ' 的网络连通性\n\n' +
+        '错误详情: ' + (e.message || e);
+      document.getElementById('obsLogFileInfo').textContent = '❌ 连接失败';
+    });
+}
+
+// 文件选择器切换 → 加载选中文件
+function obsLogLoadSelectedFile() {
+  var sel = document.getElementById('obsLogFileSel');
+  var name = sel.value;
+  if (!name) return;
+  obsLogLoadFileContent(name);
+}
+
+// 加载指定文件内容（核心函数，被 auto-refresh 和手动选择共用）
+function obsLogLoadFileContent(fileName) {
+  var ta = document.getElementById('obsLogTextarea');
+  ta.value = '加载 ' + fileName + ' ...';
+  document.getElementById('obsLogStatus').textContent = '⏳';
+  fetch(_logUrl('/logs?name=' + encodeURIComponent(fileName)))
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function(content) {
+      _obsLogAllContent = content;
+      _obsLogCurrentName = fileName;
+      ta.value = content;
+      ta.scrollTop = ta.scrollHeight;
+      document.getElementById('obsLogModalTitle').textContent = '— ' + fileName;
+      document.getElementById('obsLogFileInfo').textContent = fileName + ' | ' + (content.length / 1024).toFixed(1) + ' KB';
+      document.getElementById('obsLogStatus').textContent = '✓ 已加载';
+      if (document.getElementById('obsLogAutoRefresh').checked) {
+        obsLogStartAutoRefresh();
+      }
+    })
+    .catch(function(e) {
+      ta.value = '⚠ 读取日志失败: ' + (e.message || e);
+      document.getElementById('obsLogFileInfo').textContent = '❌ 加载失败';
+      document.getElementById('obsLogStatus').textContent = '⚠';
+    });
+}
+// ═══════════════════════════════════════
+// 自动刷新开关
+// ═══════════════════════════════════════
+function obsLogToggleAutoRefresh() {
+  if (document.getElementById('obsLogAutoRefresh').checked) {
+    obsLogStartAutoRefresh();
+  } else {
+    if (_obsLogAutoTimer) { clearInterval(_obsLogAutoTimer); _obsLogAutoTimer = null; }
+    document.getElementById('obsLogStatus').textContent = '✓ 已加载';
+  }
+}
+
+function obsLogStartAutoRefresh() {
+  if (_obsLogAutoTimer) clearInterval(_obsLogAutoTimer);
+  _obsLogAutoTimer = setInterval(function() {
+    document.getElementById('obsLogStatus').textContent = '⏳ 刷新中...';
+    if (!_obsLogCurrentName) { obsLogRefresh2(); return; }
+    fetch(_logUrl('/logs?name=' + encodeURIComponent(_obsLogCurrentName)))
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function(content) {
+        _obsLogAllContent = content;
+        var ta = document.getElementById('obsLogTextarea');
+        var wasAtBottom = (ta.scrollHeight - ta.scrollTop - ta.clientHeight) < 50;
+        ta.value = content;
+        if (wasAtBottom) ta.scrollTop = ta.scrollHeight;
+        document.getElementById('obsLogStatus').textContent = '\u2713 ' + new Date().toLocaleTimeString();
+      })
+      .catch(function() {
+        document.getElementById('obsLogStatus').textContent = '⚠ 刷新失败';
+      });
+  }, 5000);
+}
+
+// 复制全部日志
+function obsLogCopyAll() {
+  var ta = document.getElementById('obsLogTextarea');
+  if (!ta.value) return;
+  ta.select();
+  document.execCommand('copy');
+  document.getElementById('obsLogStatus').textContent = '✓ 已复制全部日志 (' + (ta.value.length / 1024).toFixed(0) + ' KB)';
+  setTimeout(function() {
+    document.getElementById('obsLogStatus').textContent = '✓ 已加载';
+  }, 2000);
+}
+
+// 复制最后100行
+function obsLogCopyTail() {
+  var ta = document.getElementById('obsLogTextarea');
+  if (!ta.value) return;
+  var lines = ta.value.split('\n');
+  var tail = lines.slice(-100).join('\n');
+  // 用临时 textarea 复制
+  var tmp = document.createElement('textarea');
+  tmp.value = tail;
+  document.body.appendChild(tmp);
+  tmp.select();
+  document.execCommand('copy');
+  document.body.removeChild(tmp);
+  document.getElementById('obsLogStatus').textContent = '✓ 已复制最后 100 行';
+  setTimeout(function() {
+    document.getElementById('obsLogStatus').textContent = '✓ 已加载';
+  }, 2000);
+}
+
+// 导出日志文件
+function obsLogExport() {
+  var ta = document.getElementById('obsLogTextarea');
+  if (!ta.value) return;
+  var filename = _obsLogCurrentName || ('obs-log-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.txt');
+  var blob = new Blob([ta.value], { type: 'text/plain' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  document.getElementById('obsLogStatus').textContent = '✓ 已导出 → ' + filename;
+  setTimeout(function() {
+    document.getElementById('obsLogStatus').textContent = '✓ 已加载';
+  }, 2500);
+}
+
+// 清空显示
+function obsLogClearView() {
+  var ta = document.getElementById('obsLogTextarea');
+  ta.value = '';
+  _obsLogAllContent = '';
+  document.getElementById('obsLogFileInfo').textContent = '已清空显示';
+  document.getElementById('obsLogStatus').textContent = '';
+}
+
+// ═══════════════════════════════════════
+// 部署说明（v1.6.0）
+// ═══════════════════════════════════════
+function openDeployHelp() {
+  document.getElementById('deployHelpOverlay').style.display = '';
+}
+function closeDeployHelp() {
+  document.getElementById('deployHelpOverlay').style.display = 'none';
+}
+
+// ═══════════════════════════════════════
+// 数据统计分析（v1.5.0）
+// ═══════════════════════════════════════
+var STATS_KEY = 'obs-stats-snapshots';
+var STATS_LAST_COLLECT = 0;
+var STATS_COLLECT_INTERVAL = 60000; // 60秒采样间隔
+var STATS_RETAIN_DAYS = 365; // 保留12个月
+
+// 立即采集一次房间状态快照
+function statsCollectNow() {
+  var now = Date.now();
+  if (now - STATS_LAST_COLLECT < STATS_COLLECT_INTERVAL - 5000) return; // 防重复
+  STATS_LAST_COLLECT = now;
+  var rooms = [];
+  for (var i = 0; i < roomManager.rooms.length; i++) {
+    var r = roomManager.rooms[i];
+    var st = roomManager.getState(r.id);
+    rooms.push({
+      id: r.id, name: r.name, host: r.host, platform: r.platform,
+      status: st.status || 'offline',
+      streaming: !!st.streaming,
+      streamTime: st.streamTime || 0,
+      recording: !!st.recording,
+      recordingTime: st.recordingTime || 0,
+      virtualCam: !!st.virtualCam,
+      virtualCamTime: st.virtualCamTime || 0,
+      alerts: (st.alerts && st.alerts.length) || 0,
+      resolution: st.resolution || '--',
+      fps: st.fps || '--',
+      bitrate: st.bitrate || '--',
+      videoEncoder: st.videoEncoder || '--',
+      audioEncoder: st.audioEncoder || '--',
+      networkQuality: st.networkQuality || '--',
+      droppedFrames: st.droppedFrames || 0,
+      dropRate: st.dropRate || '--',
+      cpu: st.cpu || '--',
+      memory: st.memory || '--'
+    });
+  }
+  if (rooms.length === 0) return;
+  var snap = { ts: now, rooms: rooms };
+  var data = statsGetSnapshots();
+  data.push(snap);
+  // 清理超期数据
+  var cutoff = now - STATS_RETAIN_DAYS * 86400000;
+  var filtered = [];
+  for (var j = 0; j < data.length; j++) { if (data[j].ts >= cutoff) filtered.push(data[j]); }
+  try { localStorage.setItem(STATS_KEY, JSON.stringify(filtered)); } catch(e) {}
+}
+
+// 读取所有历史快照
+function statsGetSnapshots() {
+  try { var r = localStorage.getItem(STATS_KEY); return r ? JSON.parse(r) : []; } catch(e) { return []; }
+}
+
+// 从快照中检测某个房间的推流会话列表
+function statsDetectSessions(snapshots, roomId) {
+  var sessions = [];
+  var current = null;
+  for (var i = 0; i < snapshots.length; i++) {
+    var snap = snapshots[i];
+    var rs = null;
+    for (var k = 0; k < snap.rooms.length; k++) { if (snap.rooms[k].id === roomId) { rs = snap.rooms[k]; break; } }
+    if (!rs) continue;
+    if (rs.streaming) {
+      if (!current) { current = { startTs: snap.ts, endTs: snap.ts }; }
+      else { current.endTs = snap.ts; }
+    } else {
+      if (current) {
+        sessions.push({
+          startTs: current.startTs,
+          endTs: current.endTs,
+          durationSec: Math.round((current.endTs - current.startTs) / 1000) + 60
+        });
+        current = null;
+      }
+    }
+  }
+  if (current) {
+    sessions.push({
+      startTs: current.startTs,
+      endTs: current.endTs,
+      durationSec: Math.round((current.endTs - current.startTs) / 1000) + 60
+    });
+  }
+  return sessions;
+}
+
+// 从快照中检测某个房间的虚拟摄像机会话列表（与推流会话同算法）
+function statsDetectVirtualCamSessions(snapshots, roomId) {
+  var sessions = [];
+  var current = null;
+  for (var i = 0; i < snapshots.length; i++) {
+    var snap = snapshots[i];
+    var rs = null;
+    for (var k = 0; k < snap.rooms.length; k++) { if (snap.rooms[k].id === roomId) { rs = snap.rooms[k]; break; } }
+    if (!rs) continue;
+    if (rs.virtualCam) {
+      if (!current) { current = { startTs: snap.ts, endTs: snap.ts }; }
+      else { current.endTs = snap.ts; }
+    } else {
+      if (current) {
+        sessions.push({
+          startTs: current.startTs,
+          endTs: current.endTs,
+          durationSec: Math.round((current.endTs - current.startTs) / 1000) + 60
+        });
+        current = null;
+      }
+    }
+  }
+  if (current) {
+    sessions.push({
+      startTs: current.startTs,
+      endTs: current.endTs,
+      durationSec: Math.round((current.endTs - current.startTs) / 1000) + 60
+    });
+  }
+  return sessions;
+}
+
+// 打开统计弹窗
+function openStatsModal() {
+  document.getElementById('statsModalOverlay').style.display = '';
+  statsPopulateRoomFilter();
+  statsSetDefaultDates();
+  statsRender();
+}
+
+// 关闭统计弹窗
+function closeStatsModal() {
+  document.getElementById('statsModalOverlay').style.display = 'none';
+}
+
+// 填充房间筛选下拉框
+function statsPopulateRoomFilter() {
+  var sel = document.getElementById('statsRoomFilter');
+  var val = sel.value;
+  var html = '<option value="">全部房间</option>';
+  for (var i = 0; i < roomManager.rooms.length; i++) {
+    var r = roomManager.rooms[i];
+    html += '<option value="' + r.id + '">' + e(r.name) + '</option>';
+  }
+  sel.innerHTML = html;
+  sel.value = val;
+}
+
+// 时间范围切换
+function statsOnRangeChange() {
+  var sel = document.getElementById('statsRangeSel').value;
+  var custom = document.getElementById('statsCustomRange');
+  if (sel === 'custom') { custom.style.display = 'flex'; statsSetDefaultDates(); }
+  else { custom.style.display = 'none'; }
+  statsRender();
+}
+
+// 设置默认日期
+function statsSetDefaultDates() {
+  var to = new Date();
+  var from = new Date();
+  from.setDate(from.getDate() - 30);
+  document.getElementById('statsDateTo').value = to.toISOString().slice(0, 10);
+  document.getElementById('statsDateFrom').value = from.toISOString().slice(0, 10);
+}
+
+// 获取筛选后的时间范围 [fromTs, toTs]
+function statsGetTimeRange() {
+  var sel = document.getElementById('statsRangeSel').value;
+  var now = Date.now();
+  var to = now;
+  var from;
+  switch(sel) {
+    case 'week': from = now - 7 * 86400000; break;
+    case 'month': from = now - 30 * 86400000; break;
+    case 'quarter': from = now - 90 * 86400000; break;
+    case 'halfyear': from = now - 180 * 86400000; break;
+    case 'year': from = now - 365 * 86400000; break;
+    case 'custom':
+      from = new Date(document.getElementById('statsDateFrom').value + 'T00:00:00').getTime();
+      to = new Date(document.getElementById('statsDateTo').value + 'T23:59:59').getTime();
+      break;
+    default: from = now - 30 * 86400000;
+  }
+  return { from: from, to: to };
+}
+
+// 格式化时长
+function statsFmtDuration(sec) {
+  if (!sec || sec < 0) return '0秒';
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  var s = sec % 60;
+  if (h > 0) return h + '小时' + (m > 0 ? m + '分' : '');
+  if (m > 0) return m + '分' + (s > 0 ? s + '秒' : '');
+  return s + '秒';
+}
+
+// 格式化日期
+function statsFmtDate(ts) {
+  var d = new Date(ts);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+// 渲染统计页面
+function statsRender() {
+  var range = statsGetTimeRange();
+  var allSnaps = statsGetSnapshots();
+  var snaps = [];
+  for (var i = 0; i < allSnaps.length; i++) { if (allSnaps[i].ts >= range.from && allSnaps[i].ts <= range.to) snaps.push(allSnaps[i]); }
+  var roomFilter = document.getElementById('statsRoomFilter').value;
+  var roomIds = [];
+  if (roomFilter) { roomIds.push(Number(roomFilter)); }
+  else { for (var ri = 0; ri < roomManager.rooms.length; ri++) roomIds.push(roomManager.rooms[ri].id); }
+
+  if (snaps.length === 0) {
+    document.getElementById('statsOverview').innerHTML = '<div class="stats-card"><span class="sc-label">暂无数据</span><div class="sc-value">—</div><div class="sc-sub">该时间范围内未采集到任何快照</div></div>';
+    document.getElementById('statsTable').innerHTML = '';
+    document.getElementById('statsStatus').textContent = '无数据';
+    return;
+  }
+
+  // 计算每个房间的统计（推流 + 虚拟摄像机）
+  var rows = [];
+  var totalSessions = 0, totalDuration = 0, totalAlerts = 0;
+  var totalVCSessions = 0, totalVCDuration = 0;
+  var totalDays = Math.max(1, Math.round((range.to - range.from) / 86400000));
+
+  for (var ridx = 0; ridx < roomIds.length; ridx++) {
+    var rid = roomIds[ridx];
+    var room = roomManager.get(rid);
+    if (!room) continue;
+
+    // 推流会话
+    var sessions = statsDetectSessions(snaps, rid);
+    var sessionCount = sessions.length;
+    var durationSum = 0, maxDur = 0, minDur = Infinity;
+    var streamDays = {};
+    for (var si = 0; si < sessions.length; si++) {
+      durationSum += sessions[si].durationSec;
+      if (sessions[si].durationSec > maxDur) maxDur = sessions[si].durationSec;
+      if (sessions[si].durationSec < minDur) minDur = sessions[si].durationSec;
+      streamDays[new Date(sessions[si].startTs).toISOString().slice(0, 10)] = true;
+    }
+
+    // 虚拟摄像机会话
+    var vcSessions = statsDetectVirtualCamSessions(snaps, rid);
+    var vcCount = vcSessions.length;
+    var vcDurSum = 0, vcMax = 0, vcMin = Infinity;
+    var vcDays = {};
+    for (var vi = 0; vi < vcSessions.length; vi++) {
+      vcDurSum += vcSessions[vi].durationSec;
+      if (vcSessions[vi].durationSec > vcMax) vcMax = vcSessions[vi].durationSec;
+      if (vcSessions[vi].durationSec < vcMin) vcMin = vcSessions[vi].durationSec;
+      vcDays[new Date(vcSessions[vi].startTs).toISOString().slice(0, 10)] = true;
+    }
+
+    var alertSum = 0;
+    for (var ni = 0; ni < snaps.length; ni++) {
+      for (var nj = 0; nj < snaps[ni].rooms.length; nj++) {
+        if (snaps[ni].rooms[nj].id === rid) { alertSum += snaps[ni].rooms[nj].alerts || 0; break; }
+      }
+    }
+    if (minDur === Infinity) minDur = 0;
+    if (vcMin === Infinity) vcMin = 0;
+    totalSessions += sessionCount;
+    totalDuration += durationSum;
+    totalVCSessions += vcCount;
+    totalVCDuration += vcDurSum;
+    totalAlerts += alertSum;
+    var avgDur = sessionCount > 0 ? Math.round(durationSum / sessionCount) : 0;
+    var vcAvg = vcCount > 0 ? Math.round(vcDurSum / vcCount) : 0;
+    var freqDays = Object.keys(streamDays).length;
+    var freqPct = totalDays > 0 ? Math.round((freqDays / totalDays) * 100) : 0;
+    var vcFreqDays = Object.keys(vcDays).length;
+    var vcFreqPct = totalDays > 0 ? Math.round((vcFreqDays / totalDays) * 100) : 0;
+    rows.push({
+      roomId: rid, roomName: room.name,
+      sessions: sessionCount, durationSum: durationSum, avgDur: avgDur,
+      maxDur: maxDur, minDur: minDur, freqDays: freqDays, freqPct: freqPct,
+      vcSessions: vcCount, vcDurationSum: vcDurSum, vcAvgDur: vcAvg,
+      vcMaxDur: vcMax, vcMinDur: vcMin, vcFreqDays: vcFreqDays, vcFreqPct: vcFreqPct,
+      alerts: alertSum
+    });
+  }
+
+  // 按总推流时长倒序
+  rows.sort(function(a, b) { return b.durationSum - a.durationSum; });
+
+  // 渲染概览卡片
+  var ov = document.getElementById('statsOverview');
+  var ovHtml = '';
+  ovHtml += '<div class="stats-card"><div class="sc-label">监控房间</div><div class="sc-value">' + roomIds.length + '</div><div class="sc-sub">有推流 ' + rows.filter(function(r){return r.sessions>0;}).length + ' / 有虚拟摄像 ' + rows.filter(function(r){return r.vcSessions>0;}).length + ' 间</div></div>';
+  ovHtml += '<div class="stats-card"><div class="sc-label">推流总次数</div><div class="sc-value">' + totalSessions + '</div><div class="sc-sub">' + totalDays + ' 天内</div></div>';
+  ovHtml += '<div class="stats-card"><div class="sc-label">推流总时长</div><div class="sc-value">' + statsFmtDuration(totalDuration) + '</div><div class="sc-sub">所有房间合计</div></div>';
+  ovHtml += '<div class="stats-card"><div class="sc-label">虚拟摄像总次数</div><div class="sc-value">' + totalVCSessions + '</div><div class="sc-sub">' + totalDays + ' 天内</div></div>';
+  ovHtml += '<div class="stats-card"><div class="sc-label">虚拟摄像总时长</div><div class="sc-value">' + statsFmtDuration(totalVCDuration) + '</div><div class="sc-sub">所有房间合计</div></div>';
+  ovHtml += '<div class="stats-card"><div class="sc-label">告警总数</div><div class="sc-value">' + totalAlerts + '</div><div class="sc-sub">采样周期内</div></div>';
+  ov.innerHTML = ovHtml;
+
+  // 渲染表格（推流 + 虚拟摄像机）
+  var th = '<tr><th>房间名称</th><th class="num">推流次数</th><th class="num">推流总时长</th><th class="num">推流频率</th><th class="num">虚拟摄像次数</th><th class="num">虚拟摄像总时长</th><th class="num">虚拟摄像频率</th><th class="num">告警数</th></tr>';
+  var tb = '';
+  for (var ri2 = 0; ri2 < rows.length; ri2++) {
+    var row = rows[ri2];
+    var freqCls = row.freqPct >= 50 ? 'ok' : (row.freqPct >= 20 ? 'warn' : '');
+    var vcFreqCls = row.vcFreqPct >= 50 ? 'ok' : (row.vcFreqPct >= 20 ? 'warn' : '');
+    tb += '<tr>' +
+      '<td><strong>' + e(row.roomName) + '</strong></td>' +
+      '<td class="num">' + row.sessions + '</td>' +
+      '<td class="num">' + (row.sessions > 0 ? statsFmtDuration(row.durationSum) : '—') + '</td>' +
+      '<td class="num ' + freqCls + '">' + row.freqPct + '% (' + row.freqDays + '天/' + totalDays + '天)</td>' +
+      '<td class="num">' + row.vcSessions + '</td>' +
+      '<td class="num">' + (row.vcSessions > 0 ? statsFmtDuration(row.vcDurationSum) : '—') + '</td>' +
+      '<td class="num ' + vcFreqCls + '">' + row.vcFreqPct + '% (' + row.vcFreqDays + '天/' + totalDays + '天)</td>' +
+      '<td class="num ' + (row.alerts > 0 ? 'warn' : '') + '">' + row.alerts + '</td>' +
+      '</tr>';
+  }
+  document.getElementById('statsTable').innerHTML = '<thead>' + th + '</thead><tbody>' + tb + '</tbody>';
+  document.getElementById('statsStatus').textContent = '✓ 已更新 ' + new Date().toLocaleTimeString();
+  document.getElementById('statsModalTitle').textContent = '— ' + statsFmtDate(range.from) + ' 至 ' + statsFmtDate(range.to);
+}
+
+// 导出 CSV
+function statsExportCSV() {
+  var range = statsGetTimeRange();
+  var allSnaps = statsGetSnapshots();
+  var snaps = [];
+  for (var i = 0; i < allSnaps.length; i++) { if (allSnaps[i].ts >= range.from && allSnaps[i].ts <= range.to) snaps.push(allSnaps[i]); }
+  var roomFilter = document.getElementById('statsRoomFilter').value;
+  var roomIds = [];
+  if (roomFilter) { roomIds.push(Number(roomFilter)); }
+  else { for (var ri = 0; ri < roomManager.rooms.length; ri++) roomIds.push(roomManager.rooms[ri].id); }
+
+  var totalDays = Math.max(1, Math.round((range.to - range.from) / 86400000));
+  var rows = [];
+  for (var ridx = 0; ridx < roomIds.length; ridx++) {
+    var rid = roomIds[ridx];
+    var room = roomManager.get(rid);
+    if (!room) continue;
+
+    // 推流
+    var sessions = statsDetectSessions(snaps, rid);
+    var durationSum = 0, maxDur = 0, minDur = Infinity;
+    var streamDays = {};
+    for (var si = 0; si < sessions.length; si++) {
+      durationSum += sessions[si].durationSec;
+      if (sessions[si].durationSec > maxDur) maxDur = sessions[si].durationSec;
+      if (sessions[si].durationSec < minDur) minDur = sessions[si].durationSec;
+      streamDays[new Date(sessions[si].startTs).toISOString().slice(0, 10)] = true;
+    }
+
+    // 虚拟摄像机
+    var vcSessions = statsDetectVirtualCamSessions(snaps, rid);
+    var vcDurSum = 0, vcMax = 0, vcMin = Infinity;
+    var vcDays = {};
+    for (var vi = 0; vi < vcSessions.length; vi++) {
+      vcDurSum += vcSessions[vi].durationSec;
+      if (vcSessions[vi].durationSec > vcMax) vcMax = vcSessions[vi].durationSec;
+      if (vcSessions[vi].durationSec < vcMin) vcMin = vcSessions[vi].durationSec;
+      vcDays[new Date(vcSessions[vi].startTs).toISOString().slice(0, 10)] = true;
+    }
+
+    var alertSum = 0;
+    for (var ni = 0; ni < snaps.length; ni++) {
+      for (var nj = 0; nj < snaps[ni].rooms.length; nj++) {
+        if (snaps[ni].rooms[nj].id === rid) { alertSum += snaps[ni].rooms[nj].alerts || 0; break; }
+      }
+    }
+    if (minDur === Infinity) minDur = 0;
+    if (vcMin === Infinity) vcMin = 0;
+    var avgDur = sessions.length > 0 ? Math.round(durationSum / sessions.length) : 0;
+    var vcAvg = vcSessions.length > 0 ? Math.round(vcDurSum / vcSessions.length) : 0;
+    var freqDays = Object.keys(streamDays).length;
+    var vcFreqDays = Object.keys(vcDays).length;
+    rows.push({
+      roomName: room.name, sessions: sessions.length,
+      durationSum: durationSum, avgDur: avgDur, maxDur: maxDur, minDur: minDur,
+      freqDays: freqDays, totalDays: totalDays, freqPct: totalDays > 0 ? Math.round((freqDays / totalDays) * 100) : 0,
+      vcSessions: vcSessions.length, vcDurationSum: vcDurSum, vcAvgDur: vcAvg,
+      vcMaxDur: vcMax, vcMinDur: vcMin, vcFreqDays: vcFreqDays, vcFreqPct: totalDays > 0 ? Math.round((vcFreqDays / totalDays) * 100) : 0,
+      alerts: alertSum
+    });
+  }
+  rows.sort(function(a, b) { return b.durationSum - a.durationSum; });
+
+  var lines = ['\uFEFF房间名称,推流次数,推流总时长(秒),推流总时长(可读),平均单次时长(秒),平均单次时长(可读),最长单次(秒),最长单次(可读),最短单次(秒),最短单次(可读),推流天数,统计天数,推流使用频率(%),告警数,虚拟摄像次数,虚拟摄像总时长(秒),虚拟摄像总时长(可读),虚拟摄像平均时长(秒),虚拟摄像平均时长(可读),虚拟摄像最长单次(秒),虚拟摄像最长单次(可读),虚拟摄像最短单次(秒),虚拟摄像最短单次(可读),虚拟摄像天数,虚拟摄像使用频率(%)'];
+  for (var ci = 0; ci < rows.length; ci++) {
+    var r = rows[ci];
+    lines.push('"' + r.roomName + '",' + r.sessions + ',' + r.durationSum + ',"' + statsFmtDuration(r.durationSum) + '",' + r.avgDur + ',"' + statsFmtDuration(r.avgDur) + '",' + r.maxDur + ',"' + statsFmtDuration(r.maxDur) + '",' + r.minDur + ',"' + statsFmtDuration(r.minDur) + '",' + r.freqDays + ',' + r.totalDays + ',' + r.freqPct + ',' + r.alerts + ',' + r.vcSessions + ',' + r.vcDurationSum + ',"' + statsFmtDuration(r.vcDurationSum) + '",' + r.vcAvgDur + ',"' + statsFmtDuration(r.vcAvgDur) + '",' + r.vcMaxDur + ',"' + statsFmtDuration(r.vcMaxDur) + '",' + r.vcMinDur + ',"' + statsFmtDuration(r.vcMinDur) + '",' + r.vcFreqDays + ',' + r.vcFreqPct);
+  }
+
+  var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  var fromStr = new Date(range.from).toISOString().slice(0, 10);
+  var toStr = new Date(range.to).toISOString().slice(0, 10);
+  a.href = URL.createObjectURL(blob);
+  a.download = 'obs-stats-' + fromStr + '_to_' + toStr + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  document.getElementById('statsStatus').textContent = '✓ 已导出 CSV';
+  setTimeout(function() { document.getElementById('statsStatus').textContent = ''; }, 2500);
+}
+
+// 清除所有统计数据
+function statsClearData() {
+  if (!confirm('确定要清除所有历史统计数据吗？此操作不可恢复。')) return;
+  try { localStorage.removeItem(STATS_KEY); } catch(e) {}
+  document.getElementById('statsStatus').textContent = '✓ 已清除';
+  statsRender();
+}
+
+// Esc 关闭（扩展）
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var sm = document.getElementById('statsModalOverlay');
+    if (sm && sm.style.display !== 'none') { closeStatsModal(); return; }
+    var m = document.getElementById('obsLogModalOverlay');
+    if (m && m.style.display !== 'none') { closeObsLogModal(); }
+  }
+});
+
+// 页面加载完成提示
 setTimeout(function() {
-  _diag('INIT', '日志就绪 — 点击左侧边栏底部「💾 下载日志」导出');
+  _diag('INIT', 'OBS 日志 — 侧边栏「📋 OBS 日志」或房间卡片底部均可打开');
 }, 1500);
 </script>
 </body>

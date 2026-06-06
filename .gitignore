@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+dist-installer/
 
 # IDE & Editor
 .vscode/
@@ -22,3 +23,12 @@ novels/
 *.py
 *.log
 dashboard.png
+
+# Secrets & local config
+obs-credentials.json
+obs-credentials-template.csv
+
+# Temp
+nul
+mid-year-review.js
+electron/test.js

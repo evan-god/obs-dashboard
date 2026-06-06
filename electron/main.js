@@ -1,15 +1,49 @@
 /**
  * OBS 监控大盘 — Electron 桌面应用 v1.3.0
  * 打包后可分发为 .exe，双击启动
+ *
+ * 兼容说明：开发模式下 node_modules/electron 会遮蔽 Electron 内置模块
+ * 导致 require('electron') 返回 npm stub（二进制路径字符串）而非 API 对象
+ * 解决方案：清除 npm stub 的 require.cache，通过 rescan 强制走 Electron 内置解析
  */
-const { app, BrowserWindow, dialog } = require('electron');
+const path = require('path');
+const Module = require('module');
+
+function _loadElectronBuiltin() {
+  // npm 安装的 electron 包 index.js 导出字符串（exe 路径），
+  // 仅在开发模式（electron .）时 node_modules/electron 会遮蔽 Electron 内置模块。
+  // 打包为 asar 后无此问题 —— asar 内部没有 node_modules。
+  var m = require('electron');
+  var isDev = (typeof m === 'string' || (m && !m.app)) && __filename.indexOf('.asar') < 0;
+  if (isDev) {
+    // 开发模式：清除 npm stub 缓存，从 module.paths 中移除项目 node_modules
+    // 让下一次 require('electron') 走 Electron 内置解析
+    for (var k of Object.keys(require.cache)) {
+      if (k.indexOf('electron') >= 0) delete require.cache[k];
+    }
+    // 只移除当前项目目录下的 node_modules（基于 __filename 推断项目根目录）
+    var projRoot = require('path').dirname(require('path').dirname(__filename));
+    var savedPaths = module.paths.slice();
+    module.paths = module.paths.filter(function(p) {
+      return p.indexOf(projRoot) < 0;
+    });
+    try {
+      m = require('electron');
+    } finally {
+      module.paths = savedPaths;
+    }
+  }
+  return m;
+}
+
+const electron = _loadElectronBuiltin();
+const { app, BrowserWindow, dialog } = electron;
 const http = require('http');
 const fs = require('fs');
-const path = require('path');
 
 // ipcMain may not be available in older Electron versions
 let ipcMain = null;
-try { ipcMain = require('electron').ipcMain; } catch(e) {}
+try { ipcMain = electron.ipcMain; } catch(e) {}
 
 
 const PORT = 8392;
@@ -38,46 +72,110 @@ function findActiveProfile() {
 
 function readEncoderConfigs(profileDir) {
   const result = {};
-  if (!profileDir || !fs.existsSync(profileDir)) return result;
+  const files = {};
+  if (!profileDir || !fs.existsSync(profileDir)) return { data: result, files: files };
   for (const fname of fs.readdirSync(profileDir)) {
     if (!fname.endsWith('.json')) continue;
     if (!/ncoder|obs_|ffmpeg_|amd_|jim_/.test(fname)) continue;
     try {
       const raw = fs.readFileSync(path.join(profileDir, fname), 'utf-8');
       result[fname.replace('.json', '')] = JSON.parse(raw);
+      files[fname.replace('.json', '')] = fname;
     } catch (_) {}
   }
-  return result;
+  return { data: result, files: files };
+}
+
+function writeEncoderConfig(profileDir, params) {
+  if (!profileDir || !fs.existsSync(profileDir)) return { ok: false, error: 'No profile directory' };
+  const { data, files } = readEncoderConfigs(profileDir);
+  var targetKey = null;
+  for (var key of Object.keys(files)) {
+    if (key === 'streamEncoder') { targetKey = key; break; }
+    if (key.startsWith('obs_nvenc') && !targetKey) { targetKey = key; }
+    if (key.startsWith('obs_x264') && !targetKey) { targetKey = key; }
+    if (!targetKey) targetKey = key;
+  }
+  if (!targetKey) {
+    targetKey = 'streamEncoder';
+    files[targetKey] = 'streamEncoder.json';
+  }
+  var cfg = data[targetKey] || {};
+  for (var p in params) { cfg[p] = params[p]; }
+  var filePath = path.join(profileDir, files[targetKey]);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(cfg, null, 2), 'utf-8');
+    return { ok: true, file: files[targetKey], key: targetKey, written: Object.keys(params) };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 // ═══════════════════════════════════════
 // HTTP 服务器
 // ═══════════════════════════════════════
 const profileDir = findActiveProfile();
-const dashboardHTML = fs.readFileSync(path.join(HERE, 'obs-dashboard.html'), 'utf-8');
+const PROJECT_DIR = path.dirname(path.dirname(__filename)); // 项目根目录 (electron/ 的父目录)
+
+// ★ 热更新：每次请求都重新读取 HTML（避免修改后需重启应用）
+function loadDashboardHTML() {
+  const altHTML = path.join(path.dirname(process.execPath), 'obs-dashboard.html');
+  const externalHTML = path.join(PROJECT_DIR, 'obs-dashboard.html');
+  try {
+    if (fs.existsSync(altHTML)) {
+      return fs.readFileSync(altHTML, 'utf-8');
+    } else if (fs.existsSync(externalHTML)) {
+      return fs.readFileSync(externalHTML, 'utf-8');
+    }
+  } catch(e) { console.error('[OBS-Dashboard] 读取 HTML 失败:', e.message); }
+  return '<h1>缺少 obs-dashboard.html 文件</h1>';
+}
 
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   if (req.url === '/' || req.url === '/index.html') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(dashboardHTML);
+    res.end(loadDashboardHTML());
     return;
   }
 
   if (req.url === '/encoder-settings') {
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', c => { body += c; });
+      req.on('end', () => {
+        try {
+          var params = JSON.parse(body);
+          var result = writeEncoderConfig(profileDir, params);
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
+        } catch (e) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+      });
+      return;
+    }
+    // GET
     const cfg = readEncoderConfigs(profileDir);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(cfg));
+    res.end(JSON.stringify(cfg.data));
     return;
   }
 
   if (req.url === '/obs-rooms.json') {
-    const roomsJSON = fs.readFileSync(path.join(HERE, 'obs-rooms.json'), 'utf-8');
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(roomsJSON);
+    try {
+      const roomsJSON = fs.readFileSync(path.join(PROJECT_DIR, 'obs-rooms.json'), 'utf-8');
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(roomsJSON);
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end('[]');
+    }
     return;
   }
 
