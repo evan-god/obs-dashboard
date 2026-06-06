@@ -12,6 +12,18 @@
 
 ---
 
+## 快速下载
+
+| 渠道 | 链接 | 说明 |
+|------|------|------|
+| 🌍 GitHub 官方 | [OBS直播间监控大盘-v1.6.2.zip](https://github.com/evan-god/obs-dashboard/releases/download/v1.6.2/OBS.-v1.6.2.zip) | 直连，国外快 |
+| 🚀 ghproxy 加速 | [OBS直播间监控大盘-v1.6.2.zip](https://ghproxy.com/https://github.com/evan-god/obs-dashboard/releases/download/v1.6.2/OBS.-v1.6.2.zip) | **国内推荐**，速度快 |
+| 🚀 gh-proxy 加速 | [OBS直播间监控大盘-v1.6.2.zip](https://gh-proxy.com/https://github.com/evan-god/obs-dashboard/releases/download/v1.6.2/OBS.-v1.6.2.zip) | 备用加速 |
+
+> 💡 **安装方式**：下载 ZIP → 解压 → 双击 `setup.bat` → 选择安装目录（默认 `C:\Program Files\OBS直播间监控大盘`）→ 完成！
+
+---
+
 ## 功能详情
 
 ### 直播监控
